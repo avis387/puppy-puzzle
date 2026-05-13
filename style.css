@@ -177,6 +177,9 @@ select {
 :root.mobile-mode .game-area {
     flex-direction: column;
 }
+:root.mobile-mode .panel-section {
+    flex-direction: column-reverse;
+}
 
 .board-section {
     flex: 1;
