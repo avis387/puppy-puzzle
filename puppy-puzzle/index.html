@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>狗狗捉迷藏 | Puppy Hide and Seek</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="game-wrapper">
+        <header>
+            <div class="title-container">
+                <h1>狗狗捉迷藏 🐾</h1>
+                <p>幫所有的小狗找到溫暖的家！</p>
+            </div>
+            
+            <div class="stats-board">
+                <div class="stat"><span class="icon">⏱️</span> <span id="time-display">00:00</span></div>
+                <div class="stat"><span class="icon">🔄</span> <span id="moves-display">0</span> 步</div>
+            </div>
+
+            <div class="controls">
+                <div class="select-wrapper">
+                    <select id="level-select">
+                        <!-- JS 將自動填入關卡 -->
+                    </select>
+                </div>
+                <button id="solve-btn" class="btn hint">💡 解答</button>
+                <button id="reset-btn" class="btn primary">重置</button>
+            </div>
+        </header>
+        
+        <main class="game-area">
+            <div class="board-section">
+                <div id="board" class="board"></div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="instructions">
+                    <h3>💡 玩法說明</h3>
+                    <ul>
+                        <li><b>房子</b> 必須蓋在小狗上。</li>
+                        <li><b>路徑</b> 絕對不能蓋到小狗。</li>
+                        <li><b>骨頭</b> 必須被路徑蓋住。</li>
+                        <li><b>大樹</b> 不能被任何東西蓋住。</li>
+                        <li>單擊旋轉，右鍵(或雙指)翻轉。</li>
+                    </ul>
+                </div>
+                <div id="pieces-tray" class="pieces-tray">
+                    <div class="tray-slot" id="slot-0"></div>
+                    <div class="tray-slot" id="slot-1"></div>
+                    <div class="tray-slot" id="slot-2"></div>
+                    <div class="tray-slot" id="slot-3"></div>
+                </div>
+            </div>
+        </main>
+        
+        <div id="victory-modal" class="modal">
+            <div class="modal-content">
+                <div class="confetti">🎉</div>
+                <h2>挑戰成功！</h2>
+                <div class="stars-container" id="victory-stars">
+                    <span class="star">⭐</span>
+                    <span class="star">⭐</span>
+                    <span class="star">⭐</span>
+                </div>
+                <p>耗時: <span id="vic-time"></span> | 步數: <span id="vic-moves"></span></p>
+                <p id="vic-msg" style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;"></p>
+                <button id="next-level-btn" class="btn success">前往下一關</button>
+            </div>
+        </div>
+        <div id="solution-modal" class="modal">
+            <div class="modal-content" style="border-top: 10px solid #03A9F4; transform: scale(1);">
+                <h2>💡 關卡解答</h2>
+                <p>仔細看好拼塊的位置，然後回去自己動手拼出來吧！</p>
+                <div id="solution-board-container" style="margin: 2rem auto; display: flex; justify-content: center;"></div>
+                <button id="close-solution-btn" class="btn primary">我知道了！繼續挑戰</button>
+            </div>
+        </div>
+    </div>
+    <script src="levels.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
