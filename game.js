@@ -247,9 +247,9 @@ function flipPiece(piece) {
 
 function getEventCoords(e) {
     if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        return { x: e.touches[0].pageX, y: e.touches[0].pageY };
     }
-    return { x: e.clientX, y: e.clientY };
+    return { x: e.pageX, y: e.pageY };
 }
 
 // Drag logic
@@ -267,8 +267,13 @@ function onDragStart(e) {
     const coords = getEventCoords(e);
     
     const rect = el.getBoundingClientRect();
-    dragOffsetX = coords.x - rect.left;
-    dragOffsetY = coords.y - rect.top;
+    dragOffsetX = coords.x - (rect.left + window.scrollX);
+    dragOffsetY = coords.y - (rect.top + window.scrollY);
+    
+    // 手機端防手指遮擋偏移 (往上提一個格子)
+    if (e.type === 'touchstart') {
+        dragOffsetY += getCellSize() * 1.5;
+    }
     
     if (el.parentNode !== document.body) {
         el.style.position = 'absolute';
@@ -312,11 +317,11 @@ function onDragEnd(e) {
     // For touchend, e.clientX is undefined, we use changedTouches
     let endX = startX, endY = startY;
     if (e.changedTouches && e.changedTouches.length > 0) {
-        endX = e.changedTouches[0].clientX;
-        endY = e.changedTouches[0].clientY;
-    } else if (e.clientX !== undefined) {
-        endX = e.clientX;
-        endY = e.clientY;
+        endX = e.changedTouches[0].pageX;
+        endY = e.changedTouches[0].pageY;
+    } else if (e.pageX !== undefined) {
+        endX = e.pageX;
+        endY = e.pageY;
     }
     
     const dx = Math.abs(endX - startX);
@@ -592,3 +597,38 @@ document.addEventListener('contextmenu', e => {
 });
 
 initGame();
+ 
+ / /   V i e w   M o d e   T o g g l e   L o g i c  
+ l e t   i s M a n u a l M o d e   =   f a l s e ;  
+ f u n c t i o n   c h e c k A u t o M o b i l e ( )   {  
+         i f   ( i s M a n u a l M o d e )   r e t u r n ;  
+         i f   ( w i n d o w . i n n e r W i d t h   < =   8 5 0 )   {  
+                 d o c u m e n t . d o c u m e n t E l e m e n t . c l a s s L i s t . a d d ( ' m o b i l e - m o d e ' ) ;  
+         }   e l s e   {  
+                 d o c u m e n t . d o c u m e n t E l e m e n t . c l a s s L i s t . r e m o v e ( ' m o b i l e - m o d e ' ) ;  
+         }  
+ }  
+ w i n d o w . a d d E v e n t L i s t e n e r ( ' r e s i z e ' ,   c h e c k A u t o M o b i l e ) ;  
+ c h e c k A u t o M o b i l e ( ) ;  
+ d o c u m e n t . g e t E l e m e n t B y I d ( ' t o g g l e - m o d e - b t n ' ) . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   ( )   = >   {  
+         i s M a n u a l M o d e   =   t r u e ;  
+         d o c u m e n t . d o c u m e n t E l e m e n t . c l a s s L i s t . t o g g l e ( ' m o b i l e - m o d e ' ) ;  
+         s e t T i m e o u t ( c h e c k W i n C o n d i t i o n ,   1 0 0 ) ;  
+ } ) ;  
+ f u n c t i o n   r e p o s i t i o n P i e c e s ( )   {  
+         c o n s t   c e l l S i z e   =   g e t C e l l S i z e ( ) ;  
+         c o n s t   g a p   =   g e t G a p ( ) ;  
+         c o n s t   c e l l S t e p   =   c e l l S i z e   +   g a p ;  
+         a c t i v e P i e c e s . f o r E a c h ( p   = >   {  
+                 i f   ( p . i s P l a c e d )   {  
+                         c o n s t   e l   =   d o c u m e n t . q u e r y S e l e c t o r ( \ . p i e c e [ d a t a - i n d e x = ' \ ' ] \ ) ;  
+                         i f ( e l )   {  
+                                 e l . s t y l e . l e f t   =   \ \ p x \ ;  
+                                 e l . s t y l e . t o p   =   \ \ p x \ ;  
+                         }  
+                 }  
+         } ) ;  
+ }  
+ w i n d o w . a d d E v e n t L i s t e n e r ( ' r e s i z e ' ,   ( )   = >   {   c h e c k A u t o M o b i l e ( ) ;   r e p o s i t i o n P i e c e s ( ) ;   } ) ;  
+ d o c u m e n t . g e t E l e m e n t B y I d ( ' t o g g l e - m o d e - b t n ' ) . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   ( )   = >   {   i s M a n u a l M o d e   =   t r u e ;   d o c u m e n t . d o c u m e n t E l e m e n t . c l a s s L i s t . t o g g l e ( ' m o b i l e - m o d e ' ) ;   r e p o s i t i o n P i e c e s ( ) ;   } ) ;  
+ 

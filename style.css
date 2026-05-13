@@ -142,66 +142,40 @@ select {
     align-items: stretch;
 }
 
-@media (max-width: 850px) {
-    .game-area {
-        flex-direction: column;
-    }
+:root.mobile-mode {
+    --cell-size: 13vw;
+    --gap: 1.5vw;
 }
-
-@media (max-width: 600px) {
-    :root {
-        --cell-size: 13vw;
-        --gap: 1.5vw;
-    }
-    body {
-        padding: 1rem;
-    }
-    header {
-        padding: 1rem;
-        flex-direction: column;
-        align-items: stretch;
-        text-align: center;
-    }
-    .stats-board {
-        justify-content: center;
-        font-size: 1rem;
-    }
-    .title-container h1 {
-        font-size: 1.8rem;
-    }
-    .cell {
-        font-size: 1.8rem;
-    }
-    .piece-block {
-        font-size: 1.4rem;
-    }
-    .dog-token {
-        font-size: 1.5rem;
-    }
-    .tree {
-        font-size: 1.6rem;
-    }
+:root.mobile-mode body {
+    padding: 1rem;
 }
-
-@media (max-width: 400px) {
-    :root {
-        --cell-size: 14vw;
-        --gap: 1vw;
-    }
-    body {
-        padding: 0.5rem;
-    }
-    .title-container h1 {
-        font-size: 1.5rem;
-    }
-    .stats-board {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    .pieces-tray {
-        min-height: 300px;
-        padding: 1rem;
-    }
+:root.mobile-mode header {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+}
+:root.mobile-mode .stats-board {
+    justify-content: center;
+    font-size: 1rem;
+}
+:root.mobile-mode .title-container h1 {
+    font-size: 1.8rem;
+}
+:root.mobile-mode .cell {
+    font-size: 1.8rem;
+}
+:root.mobile-mode .piece-block {
+    font-size: 1.4rem;
+}
+:root.mobile-mode .dog-token {
+    font-size: 1.5rem;
+}
+:root.mobile-mode .tree {
+    font-size: 1.6rem;
+}
+:root.mobile-mode .game-area {
+    flex-direction: column;
 }
 
 .board-section {
