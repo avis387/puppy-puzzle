@@ -1,7 +1,12 @@
 const BOARD_SIZE = 5;
-const CELL_SIZE = 70; // px
-const GAP = 6; // px
 
+function getCellSize() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell-size')) || 70;
+}
+
+function getGap() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 6;
+}
 const TYPES = {
     WHITE: 1, BLACK: 2, GREY: 3, ORANGE: 4, BEIGE: 5,
     BONE: 6, TREE: 7
@@ -328,7 +333,9 @@ function onDragEnd(e) {
     }
     
     const boardRect = boardEl.getBoundingClientRect();
-    const cellStep = CELL_SIZE + GAP;
+    const cellSize = getCellSize();
+    const gap = getGap();
+    const cellStep = cellSize + gap;
     
     let firstSolidR = 0, firstSolidC = 0;
     outer: for (let r = 0; r < piece.shape.length; r++) {
@@ -357,8 +364,8 @@ function onDragEnd(e) {
             piece.isPlaced = true;
             
             boardEl.appendChild(el);
-            el.style.left = `${(GAP/2) + boardC * cellStep}px`;
-            el.style.top = `${(GAP/2) + boardR * cellStep}px`;
+            el.style.left = `${(gap/2) + boardC * cellStep}px`;
+            el.style.top = `${(gap/2) + boardR * cellStep}px`;
             el.classList.add('placed');
             AudioSys.drop();
             checkWinCondition();
@@ -546,6 +553,9 @@ solveBtn.addEventListener('click', () => {
         }
     }
     
+    const cellSize = getCellSize();
+    const gap = getGap();
+    
     // Render solution pieces
     sol.forEach((placement, idx) => {
         const piece = { shape: placement.shape };
@@ -553,8 +563,8 @@ solveBtn.addEventListener('click', () => {
         el.className = 'piece';
         renderPieceDOM(piece, el);
         miniBoard.appendChild(el);
-        el.style.left = `${(GAP/2) + placement.c * (CELL_SIZE + GAP)}px`;
-        el.style.top = `${(GAP/2) + placement.r * (CELL_SIZE + GAP)}px`;
+        el.style.left = `${(gap/2) + placement.c * (cellSize + gap)}px`;
+        el.style.top = `${(gap/2) + placement.r * (cellSize + gap)}px`;
     });
     
     container.appendChild(miniBoard);
