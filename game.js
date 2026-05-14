@@ -17,17 +17,17 @@ function getGap() {
 }
 const TYPES = {
     WHITE: 1, BLACK: 2, GREY: 3, ORANGE: 4, BEIGE: 5,
-    BONE: 6, TREE: 7, FLOWER: 8, MUD: 9
+    BONE: 6, TREE: 7, FLOWER: 8, MUD: 9, HOLE: 10, FENCE: 11
 };
 
 const CLASSES = {
     1: 'dog-1', 2: 'dog-2', 3: 'dog-3', 4: 'dog-4', 5: 'dog-5',
-    6: 'bone', 7: 'tree', 8: 'flower', 9: 'mud'
+    6: 'bone', 7: 'tree', 8: 'flower', 9: 'mud', 10: 'hole', 11: 'fence'
 };
 
 const EMOJIS = {
     1: '🐶', 2: '🐺', 3: '🦝', 4: '🦊', 5: '🐕',
-    6: '🦴', 7: '🌲', 8: '🌷', 9: '🟫'
+    6: '🦴', 7: '🌲', 8: '🌷', 9: '🟫', 10: '🕳️', 11: '🚧'
 };
 
 const PIECE_SETS = {
@@ -57,6 +57,25 @@ const PIECE_SETS = {
             { id: 'C', baseShape: [[1, 1, 1], [0, 2, 0]] },
             { id: 'D', baseShape: [[2, 1], [1, 2]] }
         ]
+    },
+    cave: {
+        label: '地洞拼塊',
+        pieces: [
+            { id: 'A', baseShape: [[2, 1, 1], [1, 0, 0]] },
+            { id: 'B', baseShape: [[1, 2, 1], [0, 0, 1]] },
+            { id: 'C', baseShape: [[1, 0, 1], [0, 2, 1]] },
+            { id: 'D', baseShape: [[2, 1], [1, 2]] }
+        ]
+    },
+    master: {
+        label: '大師五塊',
+        pieces: [
+            { id: 'A', baseShape: [[2, 1, 1], [1, 0, 0]] },
+            { id: 'B', baseShape: [[1, 2, 1], [0, 1, 0]] },
+            { id: 'C', baseShape: [[1, 1, 0], [0, 2, 1]] },
+            { id: 'D', baseShape: [[2, 1], [1, 2]] },
+            { id: 'E', baseShape: [[1]] }
+        ]
     }
 };
 
@@ -65,6 +84,14 @@ const RECORDS_STORAGE_KEY = 'puppyPuzzleRecordsV2';
 
 function isDogType(value) {
     return value >= TYPES.WHITE && value <= TYPES.BEIGE;
+}
+
+function isPathType(value) {
+    return value === 1;
+}
+
+function isHouseType(value) {
+    return value === 2;
 }
 
 // Levels are now loaded globally from levels.js into GAME_LEVELS
@@ -297,6 +324,9 @@ function updateLevelSummary() {
     if (counts.trees > 0) addSummaryBadge(`大樹 ${counts.trees}`);
     if (counts.flowers > 0) addSummaryBadge(`花圃 ${counts.flowers}`);
     if (counts.mud > 0) addSummaryBadge(`泥地 ${counts.mud}`);
+    if (counts.holes > 0) addSummaryBadge(`地洞 ${counts.holes}`);
+    if (counts.fences > 0) addSummaryBadge(`柵欄 ${counts.fences}`);
+    if (levelData.requireConnectedPaths) addSummaryBadge('路徑連通');
 
     const record = getLevelRecord();
     if (record) {
@@ -359,6 +389,7 @@ function initPieces() {
         const slot = document.createElement('div');
         slot.className = 'tray-slot';
         slot.id = `slot-${index}`;
+        sizeTraySlot(slot, piece);
         tray.appendChild(slot);
         
         const el = document.createElement('div');
@@ -799,8 +830,10 @@ function isValidPlacement(piece, r, c) {
             if (boardVal === TYPES.BONE) { // Bone
                 if (val === 2) return false; // House cannot cover bone
             }
-            if (boardVal === TYPES.FLOWER && val === 1) return false; // Path cannot cover flowers
-            if (boardVal === TYPES.MUD && val === 2) return false; // House cannot cover mud
+            if (boardVal === TYPES.FLOWER && isPathType(val)) return false; // Path cannot cover flowers
+            if (boardVal === TYPES.MUD && isHouseType(val)) return false; // House cannot cover mud
+            if (boardVal === TYPES.HOLE) return false; // Holes must sit under an empty cutout.
+            if (boardVal === TYPES.FENCE) return false; // Fence cells are blockers.
             
             for (let i = 0; i < activePieces.length; i++) {
                 const other = activePieces[i];
@@ -835,11 +868,14 @@ function checkWinCondition() {
     let bonesCovered = 0;
     let totalBones = 0;
     let totalDogs = 0;
+    let holesAligned = 0;
+    let totalHoles = 0;
     
     for(let r=0; r<BOARD_SIZE; r++) {
         for(let c=0; c<BOARD_SIZE; c++) {
             if (isDogType(boardState[r][c])) totalDogs++;
             if (boardState[r][c] === TYPES.BONE) totalBones++;
+            if (boardState[r][c] === TYPES.HOLE) totalHoles++;
         }
     }
     
@@ -856,13 +892,64 @@ function checkWinCondition() {
             }
         }
     });
+
+    if (totalHoles > 0) {
+        for(let r=0; r<BOARD_SIZE; r++) {
+            for(let c=0; c<BOARD_SIZE; c++) {
+                if (boardState[r][c] !== TYPES.HOLE) continue;
+                if (isHoleAligned(r, c)) holesAligned++;
+            }
+        }
+    }
     
-    if (dogsCovered === totalDogs && bonesCovered === totalBones) {
+    if (dogsCovered === totalDogs && bonesCovered === totalBones && holesAligned === totalHoles && isPathNetworkValid()) {
         isPlaying = false;
         clearInterval(timerInterval);
         AudioSys.win();
         showVictory();
     }
+}
+
+function isHoleAligned(r, c) {
+    return activePieces.some(piece => {
+        if (!piece.isPlaced) return false;
+        const pr = r - piece.r;
+        const pc = c - piece.c;
+        return pr >= 0 && pr < piece.shape.length && pc >= 0 && pc < piece.shape[pr].length && piece.shape[pr][pc] === 0;
+    });
+}
+
+function isPathNetworkValid() {
+    const levelData = getCurrentLevelData();
+    if (!levelData.requireConnectedPaths) return true;
+
+    const pathCells = new Set();
+    activePieces.forEach(piece => {
+        if (!piece.isPlaced) return;
+        for (let pr = 0; pr < piece.shape.length; pr++) {
+            for (let pc = 0; pc < piece.shape[pr].length; pc++) {
+                if (isPathType(piece.shape[pr][pc])) pathCells.add(`${piece.r + pr},${piece.c + pc}`);
+            }
+        }
+    });
+
+    if (pathCells.size === 0) return false;
+    const [start] = pathCells;
+    const seen = new Set([start]);
+    const queue = [start];
+
+    while (queue.length > 0) {
+        const [r, c] = queue.shift().split(',').map(Number);
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dr, dc]) => {
+            const key = `${r + dr},${c + dc}`;
+            if (pathCells.has(key) && !seen.has(key)) {
+                seen.add(key);
+                queue.push(key);
+            }
+        });
+    }
+
+    return seen.size === pathCells.size;
 }
 
 function getThresholds() {
@@ -903,6 +990,13 @@ function renderVictoryBadges(badges, isNewBest) {
         badge.textContent = label;
         container.appendChild(badge);
     });
+}
+
+function sizeTraySlot(slot, piece) {
+    const rows = piece.baseShape.length;
+    const cols = Math.max(...piece.baseShape.map(row => row.length));
+    slot.style.setProperty('--slot-width', `calc(${cols} * (var(--cell-size) + var(--gap)) + 1.5rem)`);
+    slot.style.setProperty('--slot-height', `calc(${rows} * (var(--cell-size) + var(--gap)) + 1.5rem)`);
 }
 
 function showVictory() {
@@ -1012,8 +1106,10 @@ function getLevelItemCounts(levelData) {
         if (item.type === TYPES.TREE) counts.trees++;
         if (item.type === TYPES.FLOWER) counts.flowers++;
         if (item.type === TYPES.MUD) counts.mud++;
+        if (item.type === TYPES.HOLE) counts.holes++;
+        if (item.type === TYPES.FENCE) counts.fences++;
         return counts;
-    }, { bones: 0, trees: 0, flowers: 0, mud: 0 });
+    }, { bones: 0, trees: 0, flowers: 0, mud: 0, holes: 0, fences: 0 });
 }
 
 function showProgressiveHint() {
@@ -1038,6 +1134,9 @@ function showProgressiveHint() {
         if (counts.trees > 0) extraRules.push('大樹不能被任何拼塊覆蓋');
         if (counts.flowers > 0) extraRules.push('花圃不能被路徑覆蓋');
         if (counts.mud > 0) extraRules.push('泥地不能被房子覆蓋');
+        if (counts.holes > 0) extraRules.push('地洞必須對準拼塊空洞');
+        if (counts.fences > 0) extraRules.push('柵欄不能被任何拼塊覆蓋');
+        if (levelData.requireConnectedPaths) extraRules.push('所有路徑必須相連');
         hintText.textContent = extraRules.length > 0
             ? `先處理限制最多的位置：${extraRules.join('，')}。`
             : '先找小狗最集中的區域，房子格通常會先鎖定這些位置。';
