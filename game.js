@@ -70,6 +70,8 @@ let moves = 0;
 let timeElapsed = 0;
 let timerInterval = null;
 let isPlaying = false;
+let keyboardSelection = null;
+let keyboardTarget = { r: 0, c: 0 };
 
 function getMaxLevel() {
     return Math.max(...Object.keys(GAME_LEVELS).map(Number));
@@ -84,6 +86,10 @@ const modal = document.getElementById('victory-modal');
 const nextLevelBtn = document.getElementById('next-level-btn');
 const timeDisplay = document.getElementById('time-display');
 const movesDisplay = document.getElementById('moves-display');
+
+boardEl.tabIndex = 0;
+boardEl.setAttribute('role', 'grid');
+boardEl.setAttribute('aria-label', '5 乘 5 遊戲底盤。選取拼塊後可用方向鍵選擇放置格。');
 
 // Audio System
 const AudioSys = {
@@ -119,6 +125,7 @@ const AudioSys = {
 function initGame() {
     modal.classList.remove('active');
     document.getElementById('solution-modal').classList.remove('active');
+    clearKeyboardSelection();
     AudioSys.init();
     
     if (levelSelect.options.length === 0) {
@@ -172,6 +179,8 @@ function renderBoard() {
         for (let c = 0; c < BOARD_SIZE; c++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
+            cell.setAttribute('role', 'gridcell');
+            cell.setAttribute('aria-label', `第 ${r + 1} 列第 ${c + 1} 格`);
             const val = boardState[r][c];
             if (val > 0) {
                 const token = document.createElement('div');
@@ -204,12 +213,16 @@ function initPieces() {
         el.className = 'piece';
         el.dataset.index = index;
         el.style.position = 'relative'; // Flex centering in slot
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `拼塊 ${piece.id}。按 Enter 選取，方向鍵選格，R 旋轉，F 翻轉，Enter 放置。`);
         
         renderPieceDOM(piece, el);
         
         // Mouse & Touch Events
         el.addEventListener('mousedown', onDragStart);
         el.addEventListener('touchstart', onDragStart, {passive: false});
+        el.addEventListener('keydown', (e) => onPieceKeyDown(e, piece, el));
         
         el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -257,6 +270,174 @@ function flipPiece(piece) {
     piece.shape.forEach(row => row.reverse());
 }
 
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function announceStatus(message) {
+    const status = document.getElementById('assistive-status');
+    if (status) status.textContent = message;
+}
+
+function clearKeyboardSelection() {
+    if (keyboardSelection) {
+        keyboardSelection.el.classList.remove('keyboard-selected');
+    }
+    keyboardSelection = null;
+    updateKeyboardTarget();
+}
+
+function selectPieceWithKeyboard(piece, el) {
+    if (keyboardSelection) {
+        keyboardSelection.el.classList.remove('keyboard-selected');
+    }
+
+    keyboardSelection = { piece, el };
+    keyboardTarget = {
+        r: piece.isPlaced ? piece.r : 0,
+        c: piece.isPlaced ? piece.c : 0
+    };
+    el.classList.add('keyboard-selected');
+    updateKeyboardTarget();
+    announceStatus(`已選取拼塊 ${piece.id}。使用方向鍵選格，Enter 放置。`);
+}
+
+function updateKeyboardTarget() {
+    document.querySelectorAll('.cell.keyboard-target').forEach(cell => {
+        cell.classList.remove('keyboard-target');
+    });
+
+    if (!keyboardSelection) return;
+
+    const target = boardEl.querySelector(`[data-r="${keyboardTarget.r}"][data-c="${keyboardTarget.c}"]`);
+    if (target) target.classList.add('keyboard-target');
+}
+
+function moveKeyboardTarget(dr, dc) {
+    keyboardTarget.r = clamp(keyboardTarget.r + dr, 0, BOARD_SIZE - 1);
+    keyboardTarget.c = clamp(keyboardTarget.c + dc, 0, BOARD_SIZE - 1);
+    updateKeyboardTarget();
+    announceStatus(`目標格：第 ${keyboardTarget.r + 1} 列，第 ${keyboardTarget.c + 1} 欄。`);
+}
+
+function showInvalidKeyboardPlacement(el) {
+    el.classList.remove('invalid-placement');
+    void el.offsetWidth;
+    el.classList.add('invalid-placement');
+}
+
+function placeKeyboardSelection() {
+    if (!keyboardSelection) return;
+
+    const { piece, el } = keyboardSelection;
+    if (!isValidPlacement(piece, keyboardTarget.r, keyboardTarget.c)) {
+        AudioSys.error();
+        showInvalidKeyboardPlacement(el);
+        announceStatus('這個位置不能放置，請換一格試試。');
+        return;
+    }
+
+    piece.r = keyboardTarget.r;
+    piece.c = keyboardTarget.c;
+    piece.isPlaced = true;
+
+    if (el.parentNode !== boardEl) {
+        boardEl.appendChild(el);
+    }
+
+    const cellSize = getCellSize();
+    const gap = getGap();
+    const cellStep = cellSize + gap;
+    el.style.position = 'absolute';
+    el.style.left = `${(gap/2) + piece.c * cellStep}px`;
+    el.style.top = `${(gap/2) + piece.r * cellStep}px`;
+    el.classList.add('placed');
+
+    addMove();
+    AudioSys.drop();
+    announceStatus(`拼塊 ${piece.id} 已放置。`);
+    checkWinCondition();
+}
+
+function onPieceKeyDown(e, piece, el) {
+    const key = e.key.toLowerCase();
+    const isSelectedPiece = keyboardSelection && keyboardSelection.piece === piece;
+
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (!isSelectedPiece) {
+            selectPieceWithKeyboard(piece, el);
+        } else {
+            placeKeyboardSelection();
+        }
+        return;
+    }
+
+    if (!isSelectedPiece) return;
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveKeyboardTarget(-1, 0);
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveKeyboardTarget(1, 0);
+    } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        moveKeyboardTarget(0, -1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        moveKeyboardTarget(0, 1);
+    } else if (key === 'r') {
+        e.preventDefault();
+        AudioSys.rotate();
+        rotatePiece(piece);
+        renderPieceDOM(piece, el);
+        addMove();
+        if (piece.isPlaced) checkPlacement(piece, el);
+    } else if (key === 'f') {
+        e.preventDefault();
+        AudioSys.rotate();
+        flipPiece(piece);
+        renderPieceDOM(piece, el);
+        addMove();
+        if (piece.isPlaced) checkPlacement(piece, el);
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearKeyboardSelection();
+        announceStatus('已取消選取拼塊。');
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        returnToTray(el, piece);
+        addMove();
+        announceStatus(`拼塊 ${piece.id} 已回到托盤。`);
+    }
+}
+
+function onBoardKeyDown(e) {
+    if (!keyboardSelection) return;
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveKeyboardTarget(-1, 0);
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveKeyboardTarget(1, 0);
+    } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        moveKeyboardTarget(0, -1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        moveKeyboardTarget(0, 1);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        placeKeyboardSelection();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearKeyboardSelection();
+        announceStatus('已取消選取拼塊。');
+    }
+}
+
 function getEventCoords(e) {
     if (e.touches && e.touches.length > 0) {
         return { x: e.touches[0].pageX, y: e.touches[0].pageY };
@@ -270,6 +451,7 @@ let dragOffsetX, dragOffsetY;
 function onDragStart(e) {
     if (e.type === 'mousedown' && e.button !== 0) return;
     if (e.type === 'touchstart') e.preventDefault(); // Prevent scroll
+    clearKeyboardSelection();
     
     AudioSys.init(); // Ensure audio context starts
     AudioSys.pickup();
@@ -396,6 +578,9 @@ function onDragEnd(e) {
 }
 
 function returnToTray(el, piece) {
+    if (keyboardSelection && keyboardSelection.piece === piece) {
+        clearKeyboardSelection();
+    }
     piece.isPlaced = false;
     el.classList.remove('placed');
     el.style.position = 'relative';
@@ -539,6 +724,7 @@ levelSelect.addEventListener('change', (e) => {
 });
 
 resetBtn.addEventListener('click', initGame);
+boardEl.addEventListener('keydown', onBoardKeyDown);
 
 solveBtn.addEventListener('click', () => {
     const sol = GAME_LEVELS[currentLevel].solution;

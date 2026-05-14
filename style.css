@@ -136,6 +136,14 @@ select {
     box-shadow: none;
 }
 
+.btn:focus-visible,
+select:focus-visible,
+.piece:focus-visible,
+.board:focus-visible {
+    outline: 4px solid #2F5F8F;
+    outline-offset: 4px;
+}
+
 .game-area {
     display: flex;
     gap: 3rem;
@@ -212,6 +220,17 @@ select {
     font-size: 2.5rem;
     box-shadow: inset 0 3px 6px rgba(0,0,0,0.1);
     position: relative;
+}
+
+.cell.keyboard-target::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 4px solid #2F5F8F;
+    border-radius: 8px;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.75);
+    pointer-events: none;
+    z-index: 30;
 }
 
 /* Checkered grass pattern */
@@ -319,6 +338,14 @@ select {
 }
 .piece.placed:hover {
     filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+}
+
+.piece.keyboard-selected {
+    filter: drop-shadow(0 0 0.75rem rgba(47, 95, 143, 0.8)) drop-shadow(0 10px 14px rgba(0,0,0,0.35));
+}
+
+.piece.invalid-placement {
+    animation: shake 0.25s ease;
 }
 
 .piece-row {
@@ -485,6 +512,24 @@ select {
 @keyframes bounce {
     from { transform: translateY(0); }
     to { transform: translateY(-15px); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 #solution-board-container .board {
