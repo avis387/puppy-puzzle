@@ -61,6 +61,7 @@ const PIECE_SETS = {
 };
 
 const DEFAULT_PIECE_SET = 'classic';
+const RECORDS_STORAGE_KEY = 'puppyPuzzleRecordsV2';
 
 function isDogType(value) {
     return value >= TYPES.WHITE && value <= TYPES.BEIGE;
@@ -116,6 +117,7 @@ let isPlaying = false;
 let keyboardSelection = null;
 let keyboardTarget = { r: 0, c: 0 };
 let hintStep = 0;
+let dailyChallengeActive = false;
 
 function getMaxLevel() {
     return LEVEL_SEQUENCE[LEVEL_SEQUENCE.length - 1];
@@ -147,6 +149,7 @@ const boardEl = document.getElementById('board');
 const levelSelect = document.getElementById('level-select');
 const resetBtn = document.getElementById('reset-btn');
 const solveBtn = document.getElementById('solve-btn');
+const dailyBtn = document.getElementById('daily-btn');
 const modal = document.getElementById('victory-modal');
 const nextLevelBtn = document.getElementById('next-level-btn');
 const timeDisplay = document.getElementById('time-display');
@@ -226,6 +229,52 @@ function updateStatsUI() {
     timeDisplay.textContent = `${m}:${s}`;
 }
 
+function formatSeconds(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+function loadRecords() {
+    try {
+        return JSON.parse(localStorage.getItem(RECORDS_STORAGE_KEY)) || {};
+    } catch (err) {
+        return {};
+    }
+}
+
+function saveRecords(records) {
+    try {
+        localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
+    } catch (err) {
+        // Local storage can be unavailable in strict privacy modes.
+    }
+}
+
+function getLevelRecord(levelId = currentLevel) {
+    return loadRecords()[levelId] || null;
+}
+
+function saveLevelRecord(stars, badges) {
+    const records = loadRecords();
+    const id = String(currentLevel);
+    const previous = records[id] || {};
+    const next = {
+        clears: (previous.clears || 0) + 1,
+        bestStars: Math.max(previous.bestStars || 0, stars),
+        bestTime: previous.bestTime ? Math.min(previous.bestTime, timeElapsed) : timeElapsed,
+        bestMoves: previous.bestMoves ? Math.min(previous.bestMoves, moves) : moves,
+        noHint: Boolean(previous.noHint || badges.includes('無提示')),
+        dailyClears: (previous.dailyClears || 0) + (dailyChallengeActive ? 1 : 0),
+        updatedAt: new Date().toISOString()
+    };
+
+    const isNewBest = !previous.bestTime || stars > (previous.bestStars || 0) || timeElapsed < previous.bestTime || moves < previous.bestMoves;
+    records[id] = next;
+    saveRecords(records);
+    return { record: next, isNewBest };
+}
+
 function addSummaryBadge(text) {
     const badge = document.createElement('span');
     badge.className = 'level-badge';
@@ -243,10 +292,17 @@ function updateLevelSummary() {
 
     addSummaryBadge(levelData.chapter || levelData.group || '關卡');
     addSummaryBadge(pieceSet.label);
+    if (dailyChallengeActive) addSummaryBadge('今日挑戰');
     if (counts.bones > 0) addSummaryBadge(`骨頭 ${counts.bones}`);
     if (counts.trees > 0) addSummaryBadge(`大樹 ${counts.trees}`);
     if (counts.flowers > 0) addSummaryBadge(`花圃 ${counts.flowers}`);
     if (counts.mud > 0) addSummaryBadge(`泥地 ${counts.mud}`);
+
+    const record = getLevelRecord();
+    if (record) {
+        addSummaryBadge(`最佳 ${record.bestStars || 1}★ ${formatSeconds(record.bestTime)} / ${record.bestMoves}步`);
+        if (record.noHint) addSummaryBadge('無提示紀錄');
+    }
 }
 
 function addMove() {
@@ -826,6 +882,29 @@ function getThresholds() {
     return { time: 180, moves: 32 };
 }
 
+function getVictoryBadges(stars, thresholds) {
+    const badges = [];
+    if (stars === 3) badges.push('三星通關');
+    if (hintStep === 0) badges.push('無提示');
+    if (moves <= thresholds.moves) badges.push('低步數');
+    if (timeElapsed <= thresholds.time) badges.push('快速');
+    if (dailyChallengeActive) badges.push('今日挑戰');
+    return badges;
+}
+
+function renderVictoryBadges(badges, isNewBest) {
+    const container = document.getElementById('victory-badges');
+    container.innerHTML = '';
+
+    const visibleBadges = isNewBest ? ['新紀錄', ...badges] : badges;
+    visibleBadges.forEach(label => {
+        const badge = document.createElement('span');
+        badge.className = 'victory-badge';
+        badge.textContent = label;
+        container.appendChild(badge);
+    });
+}
+
 function showVictory() {
     const thresholds = getThresholds();
     let stars = 1;
@@ -852,6 +931,11 @@ function showVictory() {
     else if (stars === 2) msg = "很不錯喔！下次試著減少移動次數。";
     else msg = "順利過關！多加練習一定能更快！";
     document.getElementById('vic-msg').textContent = msg;
+
+    const badges = getVictoryBadges(stars, thresholds);
+    const { isNewBest } = saveLevelRecord(stars, badges);
+    renderVictoryBadges(badges, isNewBest);
+    updateLevelSummary();
     
     setTimeout(() => {
         modal.classList.add('active');
@@ -859,6 +943,7 @@ function showVictory() {
 }
 
 levelSelect.addEventListener('change', (e) => {
+    dailyChallengeActive = false;
     currentLevel = parseInt(e.target.value);
     initGame();
 });
@@ -866,6 +951,21 @@ levelSelect.addEventListener('change', (e) => {
 resetBtn.addEventListener('click', initGame);
 boardEl.addEventListener('keydown', onBoardKeyDown);
 document.addEventListener('keydown', onGlobalKeyboardControl);
+
+function getDailyLevelId() {
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const index = seed % LEVEL_SEQUENCE.length;
+    return LEVEL_SEQUENCE[index];
+}
+
+dailyBtn.addEventListener('click', () => {
+    dailyChallengeActive = true;
+    currentLevel = getDailyLevelId();
+    levelSelect.value = currentLevel;
+    initGame();
+    announceStatus('已切換到今日挑戰關卡。');
+});
 
 function renderHintBoard(placement) {
     const container = document.getElementById('solution-board-container');
@@ -967,6 +1067,7 @@ document.getElementById('close-solution-btn').addEventListener('click', () => {
 nextLevelBtn.addEventListener('click', () => {
     const currentSequenceIndex = getCurrentLevelSequenceIndex();
     if (currentSequenceIndex >= 0 && currentSequenceIndex < LEVEL_SEQUENCE.length - 1) {
+        dailyChallengeActive = false;
         currentLevel = LEVEL_SEQUENCE[currentSequenceIndex + 1];
         levelSelect.value = currentLevel;
         initGame();
