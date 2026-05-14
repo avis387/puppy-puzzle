@@ -38,30 +38,46 @@ const INITIAL_PIECES = [
 ];
 
 // Levels are now loaded globally from levels.js into GAME_LEVELS
+const LEVEL_SEQUENCE = [
+    3, 4, 2, 1,
+    7, 6, 11, 12, 10, 14, 13, 5, 9, 8,
+    16, 23, 17, 18, 20, 21, 15, 19, 24, 22,
+    30, 26, 28, 29, 34, 31, 25, 32, 33, 27,
+    35, 36, 40, 41, 43, 37, 42, 38, 39, 44
+];
 
 function populateLevelSelect() {
     levelSelect.innerHTML = '';
-    const groups = {};
-    for (const id in GAME_LEVELS) {
+    const groups = [];
+
+    LEVEL_SEQUENCE.forEach((id, orderIndex) => {
         const lvl = GAME_LEVELS[id];
-        if (!groups[lvl.group]) groups[lvl.group] = [];
-        groups[lvl.group].push(id);
-    }
-    
-    for (const groupName in groups) {
+        if (!lvl) return;
+
+        let group = groups.find(entry => entry.name === lvl.group);
+        if (!group) {
+            group = { name: lvl.group, options: [] };
+            groups.push(group);
+        }
+
+        group.options.push({ id, orderIndex });
+    });
+
+    groups.forEach(group => {
         const optgroup = document.createElement('optgroup');
-        optgroup.label = groupName;
-        groups[groupName].forEach(id => {
+        optgroup.label = group.name;
+        group.options.forEach(({ id, orderIndex }) => {
             const option = document.createElement('option');
             option.value = id;
-            option.textContent = `關卡 ${id}`;
+            option.textContent = `關卡 ${orderIndex + 1}`;
+            option.title = `原始關卡 ${id}`;
             optgroup.appendChild(option);
         });
         levelSelect.appendChild(optgroup);
-    }
+    });
 }
 
-let currentLevel = 1;
+let currentLevel = LEVEL_SEQUENCE[0];
 let boardState = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
 let activePieces = [];
 let draggingPiece = null;
@@ -74,7 +90,11 @@ let keyboardSelection = null;
 let keyboardTarget = { r: 0, c: 0 };
 
 function getMaxLevel() {
-    return Math.max(...Object.keys(GAME_LEVELS).map(Number));
+    return LEVEL_SEQUENCE[LEVEL_SEQUENCE.length - 1];
+}
+
+function getCurrentLevelSequenceIndex() {
+    return LEVEL_SEQUENCE.indexOf(Number(currentLevel));
 }
 
 // DOM Elements
@@ -779,8 +799,9 @@ document.getElementById('close-solution-btn').addEventListener('click', () => {
 });
 
 nextLevelBtn.addEventListener('click', () => {
-    if (currentLevel < getMaxLevel()) {
-        currentLevel++;
+    const currentSequenceIndex = getCurrentLevelSequenceIndex();
+    if (currentSequenceIndex >= 0 && currentSequenceIndex < LEVEL_SEQUENCE.length - 1) {
+        currentLevel = LEVEL_SEQUENCE[currentSequenceIndex + 1];
         levelSelect.value = currentLevel;
         initGame();
     } else {
