@@ -2,12 +2,17 @@ const fs = require('fs');
 const path = require('path');
 
 const BOARD_SIZE = 5;
-const PIECES = [
-    { id: 'A', shape: [[2, 1, 1], [1, 0, 0]] },
-    { id: 'B', shape: [[1, 2, 1], [0, 1, 0]] },
-    { id: 'C', shape: [[1, 1, 0], [0, 2, 1]] },
-    { id: 'D', shape: [[2, 1], [1, 2]] }
-];
+const PIECE_SETS = {
+    classic: [
+        { id: 'A', shape: [[2, 1, 1], [1, 0, 0]] },
+        { id: 'B', shape: [[1, 2, 1], [0, 1, 0]] },
+        { id: 'C', shape: [[1, 1, 0], [0, 2, 1]] },
+        { id: 'D', shape: [[2, 1], [1, 2]] }
+    ]
+};
+
+const DEFAULT_PIECE_SET = 'classic';
+const PIECES = PIECE_SETS[DEFAULT_PIECE_SET];
 
 const TYPES = {
     BONE: 6,
@@ -330,6 +335,7 @@ function toOutputLevel(level, group) {
 
     return {
         group,
+        pieceSet: DEFAULT_PIECE_SET,
         difficultyScore: level.analysis.score,
         solverNodes: level.analysis.nodes,
         branchSum: level.analysis.branchSum,

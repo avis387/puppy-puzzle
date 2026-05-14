@@ -30,12 +30,19 @@ const EMOJIS = {
     6: '🦴', 7: '🌲'
 };
 
-const INITIAL_PIECES = [
-    { id: 'A', baseShape: [[2, 1, 1], [1, 0, 0]] },
-    { id: 'B', baseShape: [[1, 2, 1], [0, 1, 0]] },
-    { id: 'C', baseShape: [[1, 1, 0], [0, 2, 1]] },
-    { id: 'D', baseShape: [[2, 1], [1, 2]] }
-];
+const PIECE_SETS = {
+    classic: {
+        label: '經典拼塊',
+        pieces: [
+            { id: 'A', baseShape: [[2, 1, 1], [1, 0, 0]] },
+            { id: 'B', baseShape: [[1, 2, 1], [0, 1, 0]] },
+            { id: 'C', baseShape: [[1, 1, 0], [0, 2, 1]] },
+            { id: 'D', baseShape: [[2, 1], [1, 2]] }
+        ]
+    }
+};
+
+const DEFAULT_PIECE_SET = 'classic';
 
 // Levels are now loaded globally from levels.js into GAME_LEVELS
 const LEVEL_SEQUENCE = Object.keys(GAME_LEVELS)
@@ -92,6 +99,23 @@ function getMaxLevel() {
 
 function getCurrentLevelSequenceIndex() {
     return LEVEL_SEQUENCE.indexOf(Number(currentLevel));
+}
+
+function getCurrentLevelData() {
+    return GAME_LEVELS[currentLevel];
+}
+
+function getCurrentPieceSetId() {
+    const levelData = getCurrentLevelData();
+    return levelData?.pieceSet || DEFAULT_PIECE_SET;
+}
+
+function getCurrentPieceSet() {
+    return PIECE_SETS[getCurrentPieceSetId()] || PIECE_SETS[DEFAULT_PIECE_SET];
+}
+
+function getCurrentPieces() {
+    return getCurrentPieceSet().pieces;
 }
 
 // DOM Elements
@@ -214,7 +238,10 @@ function renderBoard() {
 }
 
 function initPieces() {
-    activePieces = INITIAL_PIECES.map((p, index) => ({
+    const tray = document.getElementById('pieces-tray');
+    tray.innerHTML = '';
+
+    activePieces = getCurrentPieces().map((p, index) => ({
         ...p,
         index: index,
         shape: JSON.parse(JSON.stringify(p.baseShape)),
@@ -224,8 +251,10 @@ function initPieces() {
     }));
 
     activePieces.forEach((piece, index) => {
-        const slot = document.getElementById(`slot-${index}`);
-        slot.innerHTML = ''; // Clear slot
+        const slot = document.createElement('div');
+        slot.className = 'tray-slot';
+        slot.id = `slot-${index}`;
+        tray.appendChild(slot);
         
         const el = document.createElement('div');
         el.className = 'piece';
@@ -826,7 +855,7 @@ function getLevelItemCounts(levelData) {
 }
 
 function showProgressiveHint() {
-    const levelData = GAME_LEVELS[currentLevel];
+    const levelData = getCurrentLevelData();
     const solution = levelData.solution;
     if (!solution) {
         alert('抱歉，此關卡提示建置中。');
@@ -855,7 +884,7 @@ function showProgressiveHint() {
     } else {
         const pieceIndex = (hintStep - 3) % solution.length;
         const placement = solution[pieceIndex];
-        const pieceId = INITIAL_PIECES[pieceIndex].id;
+        const pieceId = getCurrentPieces()[pieceIndex]?.id || pieceIndex + 1;
         hintText.textContent = `單塊提示：拼塊 ${pieceId} 的左上角可嘗試放在第 ${placement.r + 1} 列、第 ${placement.c + 1} 欄。`;
         renderHintBoard(placement);
     }
