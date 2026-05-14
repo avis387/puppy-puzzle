@@ -244,6 +244,7 @@ function initPieces() {
         // Mouse & Touch Events
         el.addEventListener('mousedown', onDragStart);
         el.addEventListener('touchstart', onDragStart, {passive: false});
+        el.addEventListener('focus', () => selectPieceWithKeyboard(piece, el));
         el.addEventListener('keydown', (e) => onPieceKeyDown(e, piece, el));
         
         el.addEventListener('contextmenu', (e) => {
@@ -310,6 +311,8 @@ function clearKeyboardSelection() {
 }
 
 function selectPieceWithKeyboard(piece, el) {
+    if (keyboardSelection && keyboardSelection.piece === piece) return;
+
     if (keyboardSelection) {
         keyboardSelection.el.classList.remove('keyboard-selected');
     }
@@ -437,6 +440,8 @@ function onPieceKeyDown(e, piece, el) {
 
 function onBoardKeyDown(e) {
     if (!keyboardSelection) return;
+    const key = e.key.toLowerCase();
+    const { piece, el } = keyboardSelection;
 
     if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -457,7 +462,34 @@ function onBoardKeyDown(e) {
         e.preventDefault();
         clearKeyboardSelection();
         announceStatus('已取消選取拼塊。');
+    } else if (key === 'r') {
+        e.preventDefault();
+        AudioSys.rotate();
+        rotatePiece(piece);
+        renderPieceDOM(piece, el);
+        addMove();
+        if (piece.isPlaced) checkPlacement(piece, el);
+    } else if (key === 'f') {
+        e.preventDefault();
+        AudioSys.rotate();
+        flipPiece(piece);
+        renderPieceDOM(piece, el);
+        addMove();
+        if (piece.isPlaced) checkPlacement(piece, el);
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        returnToTray(el, piece);
+        addMove();
+        announceStatus(`拼塊 ${piece.id} 已回到托盤。`);
     }
+}
+
+function onGlobalKeyboardControl(e) {
+    if (e.defaultPrevented) return;
+    if (!keyboardSelection) return;
+    if (e.target.closest('button, select, input, textarea')) return;
+
+    onBoardKeyDown(e);
 }
 
 function getEventCoords(e) {
@@ -747,6 +779,7 @@ levelSelect.addEventListener('change', (e) => {
 
 resetBtn.addEventListener('click', initGame);
 boardEl.addEventListener('keydown', onBoardKeyDown);
+document.addEventListener('keydown', onGlobalKeyboardControl);
 
 function renderHintBoard(placement) {
     const container = document.getElementById('solution-board-container');
