@@ -1,6 +1,6 @@
 :root {
-    --primary: #7FB069;
-    --primary-dark: #6D975A;
+    --primary: #2F7D4A;
+    --primary-dark: #255F38;
     --board-bg: #8EBA43;
     --board-border: #A5C962;
     --path-color: #FFDF85;
@@ -121,14 +121,14 @@ select {
 }
 
 .btn.hint {
-    background: #03A9F4;
+    background: #0369A1;
     color: white;
-    box-shadow: 0 4px 0 #0288D1;
+    box-shadow: 0 4px 0 #024E78;
 }
 
 .btn.hint:hover {
     transform: translateY(2px);
-    box-shadow: 0 2px 0 #0288D1;
+    box-shadow: 0 2px 0 #024E78;
 }
 
 .btn.hint:active {
@@ -482,17 +482,17 @@ select:focus-visible,
 }
 
 .btn.success {
-    background: #FF9800;
+    background: #B45309;
     color: white;
     font-size: 1.3rem;
     padding: 1rem 2.5rem;
     border-radius: 16px;
-    box-shadow: 0 5px 0 #F57C00;
+    box-shadow: 0 5px 0 #7C2D12;
 }
 
 .btn.success:hover {
     transform: translateY(2px);
-    box-shadow: 0 3px 0 #F57C00;
+    box-shadow: 0 3px 0 #7C2D12;
 }
 
 .btn.success:active {
