@@ -71,6 +71,10 @@ let timeElapsed = 0;
 let timerInterval = null;
 let isPlaying = false;
 
+function getMaxLevel() {
+    return Math.max(...Object.keys(GAME_LEVELS).map(Number));
+}
+
 // DOM Elements
 const boardEl = document.getElementById('board');
 const levelSelect = document.getElementById('level-select');
@@ -589,7 +593,7 @@ document.getElementById('close-solution-btn').addEventListener('click', () => {
 });
 
 nextLevelBtn.addEventListener('click', () => {
-    if (currentLevel < 60) {
+    if (currentLevel < getMaxLevel()) {
         currentLevel++;
         levelSelect.value = currentLevel;
         initGame();
