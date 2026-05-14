@@ -1,90 +1,158 @@
 const fs = require('fs');
+const path = require('path');
 
-const pieces = [
+const BOARD_SIZE = 5;
+const PIECES = [
     { id: 'A', shape: [[2, 1, 1], [1, 0, 0]] },
     { id: 'B', shape: [[1, 2, 1], [0, 1, 0]] },
     { id: 'C', shape: [[1, 1, 0], [0, 2, 1]] },
     { id: 'D', shape: [[2, 1], [1, 2]] }
 ];
 
+const TYPES = {
+    BONE: 6,
+    TREE: 7
+};
+
+const TIERS = [
+    { group: '入門', count: 8, bones: 1, trees: 1, minScore: 12000 },
+    { group: '進階', count: 10, bones: 2, trees: 1, minScore: 15000 },
+    { group: '困難', count: 10, bones: 2, trees: 2, minScore: 17000 },
+    { group: '高手', count: 10, bones: 3, trees: 2, minScore: 19000 },
+    { group: '燒腦', count: 12, bones: 3, trees: 3, minScore: 21000 },
+    { group: '地獄', count: 10, bones: 4, trees: 3, minScore: 23000 }
+];
+
 function rotate(shape) {
-    const r = shape.length, c = shape[0].length;
-    const res = Array(c).fill().map(() => Array(r).fill(0));
-    for(let i=0; i<r; i++) for(let j=0; j<c; j++) res[j][r-1-i] = shape[i][j];
-    return res;
+    const rows = shape.length;
+    const cols = shape[0].length;
+    const result = Array.from({ length: cols }, () => Array(rows).fill(0));
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            result[c][rows - 1 - r] = shape[r][c];
+        }
+    }
+    return result;
 }
-function flip(shape) { return shape.map(row => [...row].reverse()); }
+
+function flip(shape) {
+    return shape.map(row => [...row].reverse());
+}
+
 function getOrientations(shape) {
-    const set = new Set();
-    const res = [];
-    let current = shape;
-    for (let f=0; f<2; f++) {
-        for (let r=0; r<4; r++) {
-            const str = JSON.stringify(current);
-            if (!set.has(str)) { set.add(str); res.push(current); }
+    const seen = new Set();
+    const orientations = [];
+
+    for (let flipped = 0; flipped < 2; flipped++) {
+        let current = flipped ? flip(shape) : shape;
+        for (let rotation = 0; rotation < 4; rotation++) {
+            const key = JSON.stringify(current);
+            if (!seen.has(key)) {
+                seen.add(key);
+                orientations.push(current);
+            }
             current = rotate(current);
         }
-        current = flip(shape);
     }
-    return res;
+
+    return orientations;
 }
 
-const pieceOris = pieces.map(p => getOrientations(p.shape));
+function makePrng(seed) {
+    let state = seed >>> 0;
+    return function next() {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x100000000;
+    };
+}
 
-let validPlacements = [];
-const board = Array(5).fill().map(() => Array(5).fill(0));
+function shuffle(array, random) {
+    const result = [...array];
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+}
 
-function solve(pieceIdx, currentPlacements) {
-    if (pieceIdx === 4) {
+function sampleCombination(items, count, random) {
+    return shuffle(items, random).slice(0, count);
+}
+
+function cellKey(cell) {
+    return `${cell.r},${cell.c}`;
+}
+
+function cellSpread(cells) {
+    let spread = 0;
+    for (let i = 0; i < cells.length; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+            spread += Math.abs(cells[i].r - cells[j].r) + Math.abs(cells[i].c - cells[j].c);
+        }
+    }
+    return spread;
+}
+
+const pieceOrientations = PIECES.map(piece => getOrientations(piece.shape));
+const placementBoard = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+const tilings = [];
+
+function enumerateTilings(pieceIndex, currentPlacements) {
+    if (pieceIndex === PIECES.length) {
         const houses = [];
         const paths = [];
         const empties = [];
-        for(let r=0; r<5; r++) {
-            for(let c=0; c<5; c++) {
-                if (board[r][c] === 2) houses.push({r,c});
-                else if (board[r][c] === 1) paths.push({r,c});
-                else empties.push({r,c});
+
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                const value = placementBoard[r][c];
+                if (value === 2) houses.push({ r, c });
+                else if (value === 1) paths.push({ r, c });
+                else empties.push({ r, c });
             }
         }
-        validPlacements.push({
+
+        tilings.push({
             dogs: houses,
-            paths: paths,
-            empties: empties,
+            paths,
+            empties,
             solution: JSON.parse(JSON.stringify(currentPlacements))
         });
         return;
     }
-    const oris = pieceOris[pieceIdx];
-    for (const ori of oris) {
-        const rows = ori.length, cols = ori[0].length;
-        for (let r=0; r<=5-rows; r++) {
-            for (let c=0; c<=5-cols; c++) {
+
+    for (const orientation of pieceOrientations[pieceIndex]) {
+        const rows = orientation.length;
+        const cols = orientation[0].length;
+
+        for (let r = 0; r <= BOARD_SIZE - rows; r++) {
+            for (let c = 0; c <= BOARD_SIZE - cols; c++) {
                 let valid = true;
-                for (let pr=0; pr<rows; pr++) {
-                    for (let pc=0; pc<cols; pc++) {
-                        if (ori[pr][pc] !== 0 && board[r+pr][c+pc] !== 0) { valid = false; break; }
+
+                for (let pr = 0; pr < rows && valid; pr++) {
+                    for (let pc = 0; pc < cols; pc++) {
+                        if (orientation[pr][pc] !== 0 && placementBoard[r + pr][c + pc] !== 0) {
+                            valid = false;
+                            break;
+                        }
                     }
-                    if (!valid) break;
                 }
-                if (valid) {
-                    for (let pr=0; pr<rows; pr++) {
-                        for (let pc=0; pc<cols; pc++) {
-                            if (ori[pr][pc] !== 0) board[r+pr][c+pc] = ori[pr][pc];
-                        }
+
+                if (!valid) continue;
+
+                for (let pr = 0; pr < rows; pr++) {
+                    for (let pc = 0; pc < cols; pc++) {
+                        if (orientation[pr][pc] !== 0) placementBoard[r + pr][c + pc] = orientation[pr][pc];
                     }
-                    // Simple representation of placement for solution
-                    // To accurately reconstruct flips/rotations, we can just save the 2D array or let client solve it.
-                    // Actually, the client only needs the board pieces. Wait! 
-                    // Our current "Show Solution" uses the exact rotation and flip indices.
-                    // This script doesn't track rotations/flips. It just tracks the shape.
-                    // We'll modify the client later to just use this shape data to draw a mini grid!
-                    currentPlacements.push({r, c, shape: ori});
-                    solve(pieceIdx + 1, currentPlacements);
-                    currentPlacements.pop();
-                    for (let pr=0; pr<rows; pr++) {
-                        for (let pc=0; pc<cols; pc++) {
-                            if (ori[pr][pc] !== 0) board[r+pr][c+pc] = 0;
-                        }
+                }
+
+                currentPlacements.push({ r, c, shape: orientation });
+                enumerateTilings(pieceIndex + 1, currentPlacements);
+                currentPlacements.pop();
+
+                for (let pr = 0; pr < rows; pr++) {
+                    for (let pc = 0; pc < cols; pc++) {
+                        if (orientation[pr][pc] !== 0) placementBoard[r + pr][c + pc] = 0;
                     }
                 }
             }
@@ -92,186 +160,258 @@ function solve(pieceIdx, currentPlacements) {
     }
 }
 
-console.log('Generating valid piece placements...');
-solve(0, []);
-console.log('Total valid placements:', validPlacements.length);
-
-function getCombinations(arr, k) {
-    if (k === 0) return [[]];
-    if (arr.length === 0) return [];
-    const [first, ...rest] = arr;
-    const withFirst = getCombinations(rest, k - 1).map(c => [first, ...c]);
-    const withoutFirst = getCombinations(rest, k);
-    return [...withFirst, ...withoutFirst];
+function buildGrid(level) {
+    const grid = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+    level.dogs.forEach((dog, index) => { grid[dog.r][dog.c] = index + 1; });
+    level.bones.forEach(bone => { grid[bone.r][bone.c] = TYPES.BONE; });
+    level.trees.forEach(tree => { grid[tree.r][tree.c] = TYPES.TREE; });
+    return grid;
 }
 
-// Group into difficulty buckets
-// B0T0: Casual(10), Simple(10)
-// B1T0: Hard(10)
-// B0T1: Expert(10)
-// B1T1: BrainBurning(10)
-// B2T1: Hell(10)
-
-const hashToLevel = {};
-console.log('Finding unique configurations...');
-
-// Process a subset to save time
-for (let i = 0; i < Math.min(validPlacements.length, 10000); i++) {
-    const p = validPlacements[i];
-    const dogStr = p.dogs.map(d=>d.r+','+d.c).join(';');
-    
-    // B0T0
-    hashToLevel[dogStr+'|B:|T:'] = { dogs: p.dogs, bones: [], trees: [], sol: p.solution };
-    
-    // B1T0
-    for(const b of p.paths) {
-        hashToLevel[dogStr+'|B:'+b.r+','+b.c+'|T:'] = { dogs: p.dogs, bones: [b], trees: [], sol: p.solution };
-    }
-    
-    // B0T1
-    for(const t of p.empties) {
-        hashToLevel[dogStr+'|B:|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: [], trees: [t], sol: p.solution };
-    }
-    
-    // B1T1
-    for(const b of p.paths) {
-        for(const t of p.empties) {
-            hashToLevel[dogStr+'|B:'+b.r+','+b.c+'|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: [b], trees: [t], sol: p.solution };
+function getPieceCells(shape, r, c) {
+    const cells = [];
+    for (let pr = 0; pr < shape.length; pr++) {
+        for (let pc = 0; pc < shape[0].length; pc++) {
+            if (shape[pr][pc] !== 0) cells.push({ r: r + pr, c: c + pc, value: shape[pr][pc] });
         }
     }
-    
-    // B2T1
-    const b2Combs = getCombinations(p.paths, 2);
-    for(const bc of b2Combs) {
-        for(const t of p.empties) {
-            hashToLevel[dogStr+'|B:'+bc.map(b=>b.r+','+b.c).join(';')+'|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: bc, trees: [t], sol: p.solution };
+    return cells;
+}
+
+function isSoloPlacementValid(grid, shape, r, c) {
+    for (const cell of getPieceCells(shape, r, c)) {
+        if (cell.r < 0 || cell.r >= BOARD_SIZE || cell.c < 0 || cell.c >= BOARD_SIZE) return false;
+
+        const boardValue = grid[cell.r][cell.c];
+        if (boardValue >= 1 && boardValue <= 5 && cell.value === 1) return false;
+        if (boardValue === TYPES.BONE && cell.value === 2) return false;
+        if (boardValue === TYPES.TREE) return false;
+    }
+
+    return true;
+}
+
+function analyzeLevel(level) {
+    const grid = buildGrid(level);
+    const dogTotal = level.dogs.length;
+    const boneTotal = level.bones.length;
+
+    const candidates = PIECES.map((piece, pieceIndex) => {
+        const placements = [];
+        for (const orientation of pieceOrientations[pieceIndex]) {
+            for (let r = 0; r <= BOARD_SIZE - orientation.length; r++) {
+                for (let c = 0; c <= BOARD_SIZE - orientation[0].length; c++) {
+                    if (!isSoloPlacementValid(grid, orientation, r, c)) continue;
+                    placements.push({
+                        r,
+                        c,
+                        shape: orientation,
+                        cells: getPieceCells(orientation, r, c)
+                    });
+                }
+            }
         }
-    }
-}
-
-// Now we count occurrences across ALL 129024 to find UNIQUE ones.
-// That might take too long. Let's just assume some are unique or generate a smaller uniqueness check.
-// Wait! If we don't check uniqueness across ALL 129,024, the generated level might have multiple solutions!
-// The solver MUST check all 129,024.
-console.log('Counting frequencies across all 129024 configurations...');
-const counts = new Map();
-
-// We only want to track frequencies for the ones we picked, to save memory.
-// Actually, tracking string hashes in a Map is very fast in V8.
-let count = 0;
-for (const p of validPlacements) {
-    count++;
-    if(count % 20000 === 0) console.log(count + '/' + validPlacements.length);
-    const dogStr = p.dogs.map(d=>d.r+','+d.c).join(';');
-    
-    // Check 0B 0T
-    let h = dogStr+'|B:|T:';
-    counts.set(h, (counts.get(h)||0)+1);
-    
-    // Only check combinations if they don't explode memory.
-    // Instead of computing all, let's pre-select candidates from the first 500 placements,
-    // and ONLY increment their counts when iterating over all 129024!
-}
-
-console.log('Second pass checking...');
-const candidates = {};
-for (let i = 0; i < 500; i++) {
-    const p = validPlacements[i];
-    const dogStr = p.dogs.map(d=>d.r+','+d.c).join(';');
-    
-    // Add all combinations from these 500 as candidates
-    candidates[dogStr+'|B:|T:'] = { dogs: p.dogs, bones: [], trees: [], sol: p.solution };
-    for(const b of p.paths) candidates[dogStr+'|B:'+b.r+','+b.c+'|T:'] = { dogs: p.dogs, bones: [b], trees: [], sol: p.solution };
-    for(const t of p.empties) candidates[dogStr+'|B:|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: [], trees: [t], sol: p.solution };
-    for(const b of p.paths) for(const t of p.empties) candidates[dogStr+'|B:'+b.r+','+b.c+'|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: [b], trees: [t], sol: p.solution };
-    const b2Combs = getCombinations(p.paths, 2);
-    for(const bc of b2Combs) for(const t of p.empties) candidates[dogStr+'|B:'+bc.map(b=>b.r+','+b.c).join(';')+'|T:'+t.r+','+t.c] = { dogs: p.dogs, bones: bc, trees: [t], sol: p.solution };
-}
-
-console.log('Candidate count:', Object.keys(candidates).length);
-const candidateCounts = {};
-for(let c in candidates) candidateCounts[c] = 0;
-
-for (const p of validPlacements) {
-    const dogStr = p.dogs.map(d=>d.r+','+d.c).join(';');
-    if (candidateCounts[dogStr+'|B:|T:'] !== undefined) candidateCounts[dogStr+'|B:|T:']++;
-    for(const b of p.paths) {
-        const h = dogStr+'|B:'+b.r+','+b.c+'|T:';
-        if (candidateCounts[h] !== undefined) candidateCounts[h]++;
-    }
-    for(const t of p.empties) {
-        const h = dogStr+'|B:|T:'+t.r+','+t.c;
-        if (candidateCounts[h] !== undefined) candidateCounts[h]++;
-    }
-    for(const b of p.paths) {
-        for(const t of p.empties) {
-            const h = dogStr+'|B:'+b.r+','+b.c+'|T:'+t.r+','+t.c;
-            if (candidateCounts[h] !== undefined) candidateCounts[h]++;
-        }
-    }
-    const b2Combs = getCombinations(p.paths, 2);
-    for(const bc of b2Combs) {
-        for(const t of p.empties) {
-            const h = dogStr+'|B:'+bc.map(b=>b.r+','+b.c).join(';')+'|T:'+t.r+','+t.c;
-            if (candidateCounts[h] !== undefined) candidateCounts[h]++;
-        }
-    }
-}
-
-const finalLevels = {
-    casual: [], simple: [], hard: [], expert: [], brainBurning: [], hell: []
-};
-
-for (const hash in candidates) {
-    if (candidateCounts[hash] === 1) {
-        const lvl = candidates[hash];
-        const bLen = lvl.bones.length;
-        const tLen = lvl.trees.length;
-        
-        if (bLen === 0 && tLen === 0) {
-            if (finalLevels.casual.length < 10) finalLevels.casual.push(lvl);
-            else if (finalLevels.simple.length < 10) finalLevels.simple.push(lvl);
-        } else if (bLen === 1 && tLen === 0) {
-            if (finalLevels.hard.length < 10) finalLevels.hard.push(lvl);
-        } else if (bLen === 0 && tLen === 1) {
-            if (finalLevels.expert.length < 10) finalLevels.expert.push(lvl);
-        } else if (bLen === 1 && tLen === 1) {
-            if (finalLevels.brainBurning.length < 10) finalLevels.brainBurning.push(lvl);
-        } else if (bLen === 2 && tLen === 1) {
-            if (finalLevels.hell.length < 10) finalLevels.hell.push(lvl);
-        }
-    }
-}
-
-const TYPES = {
-    WHITE: 1, BLACK: 2, GREY: 3, ORANGE: 4, BEIGE: 5, BONE: 6, TREE: 7
-};
-
-const output = {};
-let globalId = 1;
-
-function processCategory(catArray, groupName) {
-    catArray.forEach(lvl => {
-        const arr = [];
-        lvl.dogs.forEach((d, i) => { arr.push({type: i+1, r: d.r, c: d.c}); });
-        lvl.bones.forEach(b => { arr.push({type: TYPES.BONE, r: b.r, c: b.c}); });
-        lvl.trees.forEach(t => { arr.push({type: TYPES.TREE, r: t.r, c: t.c}); });
-        
-        output[globalId] = {
-            group: groupName,
-            items: arr,
-            solution: lvl.sol
-        };
-        globalId++;
+        return placements;
     });
+
+    let solutionCount = 0;
+    let nodes = 0;
+    const occupied = new Set();
+
+    function search(pieceIndex, coveredDogs, coveredBones) {
+        nodes++;
+        if (solutionCount > 1) return;
+
+        if (pieceIndex === PIECES.length) {
+            if (coveredDogs.size === dogTotal && coveredBones.size === boneTotal) solutionCount++;
+            return;
+        }
+
+        for (const candidate of candidates[pieceIndex]) {
+            let overlaps = false;
+            for (const cell of candidate.cells) {
+                if (occupied.has(cellKey(cell))) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps) continue;
+
+            const nextDogs = new Set(coveredDogs);
+            const nextBones = new Set(coveredBones);
+
+            candidate.cells.forEach(cell => {
+                const boardValue = grid[cell.r][cell.c];
+                if (cell.value === 2 && boardValue >= 1 && boardValue <= 5) nextDogs.add(cellKey(cell));
+                if (cell.value === 1 && boardValue === TYPES.BONE) nextBones.add(cellKey(cell));
+            });
+
+            candidate.cells.forEach(cell => occupied.add(cellKey(cell)));
+            search(pieceIndex + 1, nextDogs, nextBones);
+            candidate.cells.forEach(cell => occupied.delete(cellKey(cell)));
+        }
+    }
+
+    search(0, new Set(), new Set());
+
+    const branchSum = candidates.reduce((sum, candidateList) => sum + candidateList.length, 0);
+    const branchProduct = candidates.reduce((product, candidateList) => product * candidateList.length, 1);
+    const score = nodes + branchSum * 70 + Math.log10(branchProduct) * 1200 + cellSpread(level.dogs) * 250;
+
+    return {
+        branchSum,
+        branchProduct,
+        nodes,
+        score: Math.round(score),
+        solutions: solutionCount
+    };
 }
 
-processCategory(finalLevels.casual, '休閒');
-processCategory(finalLevels.simple, '簡單');
-processCategory(finalLevels.hard, '困難');
-processCategory(finalLevels.expert, '高手');
-processCategory(finalLevels.brainBurning, '燒腦');
-processCategory(finalLevels.hell, '地獄');
+function levelSignature(level) {
+    const dogs = level.dogs.map(cellKey).sort().join(';');
+    const bones = level.bones.map(cellKey).sort().join(';');
+    const trees = level.trees.map(cellKey).sort().join(';');
+    return `D:${dogs}|B:${bones}|T:${trees}`;
+}
 
-fs.writeFileSync('levels.js', 'const GAME_LEVELS = ' + JSON.stringify(output, null, 2) + ';\n');
-console.log('Successfully generated levels.js!');
+function makeLevelFromTiling(tiling, tier, random) {
+    return {
+        dogs: tiling.dogs,
+        bones: sampleCombination(tiling.paths, tier.bones, random),
+        trees: sampleCombination(tiling.empties, tier.trees, random),
+        solution: tiling.solution
+    };
+}
+
+function pickLevelsForTier(tier, random, usedSignatures) {
+    const candidates = [];
+    const shuffledTilings = shuffle(tilings, random);
+    const maxAttempts = Math.min(shuffledTilings.length, 2800);
+
+    for (let i = 0; i < maxAttempts; i++) {
+        const tiling = shuffledTilings[i];
+
+        for (let variant = 0; variant < 2; variant++) {
+            const level = makeLevelFromTiling(tiling, tier, random);
+            const signature = levelSignature(level);
+            if (usedSignatures.has(signature)) continue;
+
+            const analysis = analyzeLevel(level);
+            if (analysis.solutions !== 1) continue;
+
+            candidates.push({ ...level, analysis, signature });
+        }
+    }
+
+    candidates.sort((a, b) => b.analysis.score - a.analysis.score);
+
+    const selected = [];
+    for (const candidate of candidates) {
+        if (selected.length >= tier.count) break;
+        if (candidate.analysis.score < tier.minScore && selected.length >= Math.ceil(tier.count * 0.7)) continue;
+
+        selected.push(candidate);
+        usedSignatures.add(candidate.signature);
+    }
+
+    if (selected.length < tier.count) {
+        throw new Error(`Not enough levels for ${tier.group}. Needed ${tier.count}, got ${selected.length}.`);
+    }
+
+    selected.sort((a, b) => a.analysis.score - b.analysis.score);
+    return selected;
+}
+
+function toOutputLevel(level, group) {
+    const items = [];
+    level.dogs.forEach((dog, index) => items.push({ type: index + 1, r: dog.r, c: dog.c }));
+    level.bones.forEach(bone => items.push({ type: TYPES.BONE, r: bone.r, c: bone.c }));
+    level.trees.forEach(tree => items.push({ type: TYPES.TREE, r: tree.r, c: tree.c }));
+
+    return {
+        group,
+        difficultyScore: level.analysis.score,
+        solverNodes: level.analysis.nodes,
+        branchSum: level.analysis.branchSum,
+        items,
+        solution: level.solution
+    };
+}
+
+function main() {
+    console.log('Enumerating all piece tilings...');
+    enumerateTilings(0, []);
+    console.log(`Tilings: ${tilings.length}`);
+
+    const random = makePrng(20260514);
+    const usedSignatures = new Set();
+    const output = {};
+    const reportRows = [];
+    let levelId = 1;
+
+    TIERS.forEach(tier => {
+        console.log(`Selecting ${tier.group} levels...`);
+        const levels = pickLevelsForTier(tier, random, usedSignatures);
+        levels.forEach(level => {
+            output[levelId] = toOutputLevel(level, tier.group);
+            reportRows.push({
+                id: levelId,
+                group: tier.group,
+                bones: tier.bones,
+                trees: tier.trees,
+                score: level.analysis.score,
+                nodes: level.analysis.nodes,
+                branchSum: level.analysis.branchSum
+            });
+            levelId++;
+        });
+    });
+
+    const projectRoot = path.resolve(__dirname, '..');
+    const levelsPath = path.join(projectRoot, 'levels.js');
+    const reportPath = path.join(projectRoot, 'production', 'discussions', 'level-difficulty-scorecard.md');
+
+    fs.writeFileSync(levelsPath, `const GAME_LEVELS = ${JSON.stringify(output, null, 2)};\n`, 'utf8');
+
+    const report = [
+        '# Level Difficulty Scorecard',
+        '',
+        '**Date**: 2026-05-14',
+        '',
+        '## Current Difficulty Model',
+        '',
+        'Levels are generated from verified full-board piece tilings. Dogs are placed on solution house cells, bones on solution path cells, and trees on solution empty cells. A level is accepted only when the solver confirms exactly one valid solution.',
+        '',
+        'The upgraded generator also ranks candidates by solver search cost, legal placement branch count, and dog spread. Later tiers use more bones and trees, but they are selected for high ambiguity rather than just higher obstacle count.',
+        '',
+        '## Tier Rules',
+        '',
+        '| Tier | Count | Bones | Trees | Intent |',
+        '|---|---:|---:|---:|---|',
+        '| 入門 | 8 | 1 | 1 | Teach obstacle reading without empty boards. |',
+        '| 進階 | 10 | 2 | 1 | Add path obligations and early false starts. |',
+        '| 困難 | 10 | 2 | 2 | Mix path obligations with blocked empty cells. |',
+        '| 高手 | 10 | 3 | 2 | Require more elimination before committing pieces. |',
+        '| 燒腦 | 12 | 3 | 3 | High ambiguity and multiple tempting placements. |',
+        '| 地獄 | 10 | 4 | 3 | Dense constraints with unique-solution verification. |',
+        '',
+        '## Generated Levels',
+        '',
+        '| Level | Group | Bones | Trees | Difficulty Score | Solver Nodes | Branch Sum |',
+        '|---:|---|---:|---:|---:|---:|---:|',
+        ...reportRows.map(row => `| ${row.id} | ${row.group} | ${row.bones} | ${row.trees} | ${row.score} | ${row.nodes} | ${row.branchSum} |`),
+        '',
+        '## Follow-Up Suggestions',
+        '',
+        '- Add a failure-aware hint system: first hint unlocks after 3 failed placements, deeper hints after 6 and 9.',
+        '- Add optional challenge badges for no-hint clears and low-move clears.',
+        '- Consider adding a fifth piece or alternate piece set for a true expert pack; this would require a separate GDD/ADR pass because it changes the core puzzle grammar.'
+    ].join('\n');
+
+    fs.writeFileSync(reportPath, `${report}\n`, 'utf8');
+
+    console.log(`Wrote ${Object.keys(output).length} levels to ${levelsPath}`);
+    console.log(`Wrote difficulty report to ${reportPath}`);
+}
+
+main();

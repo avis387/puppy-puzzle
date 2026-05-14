@@ -38,13 +38,9 @@ const INITIAL_PIECES = [
 ];
 
 // Levels are now loaded globally from levels.js into GAME_LEVELS
-const LEVEL_SEQUENCE = [
-    3, 4, 2, 1,
-    7, 6, 11, 12, 10, 14, 13, 5, 9, 8,
-    16, 23, 17, 18, 20, 21, 15, 19, 24, 22,
-    30, 26, 28, 29, 34, 31, 25, 32, 33, 27,
-    35, 36, 40, 41, 43, 37, 42, 38, 39, 44
-];
+const LEVEL_SEQUENCE = Object.keys(GAME_LEVELS)
+    .map(Number)
+    .sort((a, b) => a - b);
 
 function populateLevelSelect() {
     levelSelect.innerHTML = '';
@@ -733,11 +729,12 @@ function checkWinCondition() {
 
 function getThresholds() {
     const lvl = GAME_LEVELS[currentLevel];
-    if (lvl.group === '休閒' || lvl.group === '簡單') return { time: 40, moves: 10 };
-    if (lvl.group === '困難') return { time: 60, moves: 15 };
-    if (lvl.group === '高手') return { time: 80, moves: 18 };
-    if (lvl.group === '燒腦') return { time: 100, moves: 22 };
-    return { time: 120, moves: 25 }; // Hell
+    if (lvl.group === '入門') return { time: 55, moves: 12 };
+    if (lvl.group === '進階') return { time: 75, moves: 16 };
+    if (lvl.group === '困難') return { time: 95, moves: 20 };
+    if (lvl.group === '高手') return { time: 120, moves: 24 };
+    if (lvl.group === '燒腦') return { time: 150, moves: 28 };
+    return { time: 180, moves: 32 };
 }
 
 function showVictory() {
