@@ -2,17 +2,27 @@ const fs = require('fs');
 const path = require('path');
 
 const BOARD_SIZE = 5;
+
 const PIECE_SETS = {
     classic: [
         { id: 'A', shape: [[2, 1, 1], [1, 0, 0]] },
         { id: 'B', shape: [[1, 2, 1], [0, 1, 0]] },
         { id: 'C', shape: [[1, 1, 0], [0, 2, 1]] },
         { id: 'D', shape: [[2, 1], [1, 2]] }
+    ],
+    garden: [
+        { id: 'A', shape: [[2, 1, 1], [0, 1, 0]] },
+        { id: 'B', shape: [[1, 2, 0], [0, 1, 1]] },
+        { id: 'C', shape: [[1, 0], [1, 2], [1, 0]] },
+        { id: 'D', shape: [[2, 1], [1, 2]] }
+    ],
+    expert: [
+        { id: 'A', shape: [[2, 1, 0], [0, 1, 1]] },
+        { id: 'B', shape: [[1, 2], [1, 0], [1, 0]] },
+        { id: 'C', shape: [[1, 1, 1], [0, 2, 0]] },
+        { id: 'D', shape: [[2, 1], [1, 2]] }
     ]
 };
-
-const DEFAULT_PIECE_SET = 'classic';
-const PIECES = PIECE_SETS[DEFAULT_PIECE_SET];
 
 const TYPES = {
     BONE: 6,
@@ -21,13 +31,13 @@ const TYPES = {
     MUD: 9
 };
 
-const TIERS = [
-    { group: '入門', count: 8, bones: 1, trees: 1, minScore: 12000 },
-    { group: '進階', count: 10, bones: 2, trees: 1, minScore: 15000 },
-    { group: '困難', count: 10, bones: 2, trees: 2, minScore: 17000 },
-    { group: '高手', count: 10, bones: 3, trees: 2, minScore: 19000 },
-    { group: '燒腦', count: 12, bones: 3, trees: 3, minScore: 21000 },
-    { group: '地獄', count: 10, bones: 4, trees: 3, minScore: 23000 }
+const CHAPTERS = [
+    { group: '草地篇', count: 10, pieceSet: 'classic', bones: 1, trees: 1, flowers: 0, mud: 0, minScore: 16000, rank: 1, intent: 'Teach the base dog, bone, and tree grammar.' },
+    { group: '花園篇', count: 10, pieceSet: 'classic', bones: 2, trees: 1, flowers: 1, mud: 0, minScore: 19000, rank: 2, intent: 'Introduce flower cells that reject path coverage.' },
+    { group: '雨後篇', count: 10, pieceSet: 'classic', bones: 2, trees: 2, flowers: 1, mud: 1, minScore: 21000, rank: 3, intent: 'Introduce mud cells that reject house coverage.' },
+    { group: '花園巧拼篇', count: 12, pieceSet: 'garden', bones: 3, trees: 2, flowers: 1, mud: 1, minScore: 23000, rank: 4, intent: 'Switch to a new piece grammar while keeping familiar objects.' },
+    { group: '密林篇', count: 12, pieceSet: 'garden', bones: 3, trees: 3, flowers: 2, mud: 1, minScore: 25000, rank: 5, intent: 'Increase blocked cells and anti-path reads.' },
+    { group: '專家篇', count: 16, pieceSet: 'expert', bones: 4, trees: 3, flowers: 2, mud: 2, minScore: 27000, rank: 6, intent: 'Use the hardest piece set with dense mixed constraints.' }
 ];
 
 function rotate(shape) {
@@ -82,8 +92,9 @@ function shuffle(array, random) {
     return result;
 }
 
-function sampleCombination(items, count, random) {
-    return shuffle(items, random).slice(0, count);
+function takeCells(cells, count) {
+    if (cells.length < count) return null;
+    return cells.slice(0, count);
 }
 
 function cellKey(cell) {
@@ -100,26 +111,38 @@ function cellSpread(cells) {
     return spread;
 }
 
-const pieceOrientations = PIECES.map(piece => getOrientations(piece.shape));
-const placementBoard = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
-const tilings = [];
+function createRuntime(pieceSetId) {
+    const pieces = PIECE_SETS[pieceSetId];
+    if (!pieces) throw new Error(`Unknown piece set: ${pieceSetId}`);
 
-function enumerateTilings(pieceIndex, currentPlacements) {
-    if (pieceIndex === PIECES.length) {
+    const runtime = {
+        pieceSetId,
+        pieces,
+        pieceOrientations: pieces.map(piece => getOrientations(piece.shape)),
+        placementBoard: Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0)),
+        tilings: []
+    };
+
+    enumerateTilings(runtime, 0, []);
+    return runtime;
+}
+
+function enumerateTilings(runtime, pieceIndex, currentPlacements) {
+    if (pieceIndex === runtime.pieces.length) {
         const houses = [];
         const paths = [];
         const empties = [];
 
         for (let r = 0; r < BOARD_SIZE; r++) {
             for (let c = 0; c < BOARD_SIZE; c++) {
-                const value = placementBoard[r][c];
+                const value = runtime.placementBoard[r][c];
                 if (value === 2) houses.push({ r, c });
                 else if (value === 1) paths.push({ r, c });
                 else empties.push({ r, c });
             }
         }
 
-        tilings.push({
+        runtime.tilings.push({
             dogs: houses,
             paths,
             empties,
@@ -128,7 +151,7 @@ function enumerateTilings(pieceIndex, currentPlacements) {
         return;
     }
 
-    for (const orientation of pieceOrientations[pieceIndex]) {
+    for (const orientation of runtime.pieceOrientations[pieceIndex]) {
         const rows = orientation.length;
         const cols = orientation[0].length;
 
@@ -138,7 +161,7 @@ function enumerateTilings(pieceIndex, currentPlacements) {
 
                 for (let pr = 0; pr < rows && valid; pr++) {
                     for (let pc = 0; pc < cols; pc++) {
-                        if (orientation[pr][pc] !== 0 && placementBoard[r + pr][c + pc] !== 0) {
+                        if (orientation[pr][pc] !== 0 && runtime.placementBoard[r + pr][c + pc] !== 0) {
                             valid = false;
                             break;
                         }
@@ -149,17 +172,17 @@ function enumerateTilings(pieceIndex, currentPlacements) {
 
                 for (let pr = 0; pr < rows; pr++) {
                     for (let pc = 0; pc < cols; pc++) {
-                        if (orientation[pr][pc] !== 0) placementBoard[r + pr][c + pc] = orientation[pr][pc];
+                        if (orientation[pr][pc] !== 0) runtime.placementBoard[r + pr][c + pc] = orientation[pr][pc];
                     }
                 }
 
                 currentPlacements.push({ r, c, shape: orientation });
-                enumerateTilings(pieceIndex + 1, currentPlacements);
+                enumerateTilings(runtime, pieceIndex + 1, currentPlacements);
                 currentPlacements.pop();
 
                 for (let pr = 0; pr < rows; pr++) {
                     for (let pc = 0; pc < cols; pc++) {
-                        if (orientation[pr][pc] !== 0) placementBoard[r + pr][c + pc] = 0;
+                        if (orientation[pr][pc] !== 0) runtime.placementBoard[r + pr][c + pc] = 0;
                     }
                 }
             }
@@ -172,6 +195,8 @@ function buildGrid(level) {
     level.dogs.forEach((dog, index) => { grid[dog.r][dog.c] = index + 1; });
     level.bones.forEach(bone => { grid[bone.r][bone.c] = TYPES.BONE; });
     level.trees.forEach(tree => { grid[tree.r][tree.c] = TYPES.TREE; });
+    level.flowers.forEach(flower => { grid[flower.r][flower.c] = TYPES.FLOWER; });
+    level.mud.forEach(mud => { grid[mud.r][mud.c] = TYPES.MUD; });
     return grid;
 }
 
@@ -200,14 +225,14 @@ function isSoloPlacementValid(grid, shape, r, c) {
     return true;
 }
 
-function analyzeLevel(level) {
+function analyzeLevel(level, runtime) {
     const grid = buildGrid(level);
     const dogTotal = level.dogs.length;
     const boneTotal = level.bones.length;
 
-    const candidates = PIECES.map((piece, pieceIndex) => {
+    const candidates = runtime.pieces.map((piece, pieceIndex) => {
         const placements = [];
-        for (const orientation of pieceOrientations[pieceIndex]) {
+        for (const orientation of runtime.pieceOrientations[pieceIndex]) {
             for (let r = 0; r <= BOARD_SIZE - orientation.length; r++) {
                 for (let c = 0; c <= BOARD_SIZE - orientation[0].length; c++) {
                     if (!isSoloPlacementValid(grid, orientation, r, c)) continue;
@@ -231,7 +256,7 @@ function analyzeLevel(level) {
         nodes++;
         if (solutionCount > 1) return;
 
-        if (pieceIndex === PIECES.length) {
+        if (pieceIndex === runtime.pieces.length) {
             if (coveredDogs.size === dogTotal && coveredBones.size === boneTotal) solutionCount++;
             return;
         }
@@ -264,8 +289,9 @@ function analyzeLevel(level) {
     search(0, new Set(), new Set());
 
     const branchSum = candidates.reduce((sum, candidateList) => sum + candidateList.length, 0);
-    const branchProduct = candidates.reduce((product, candidateList) => product * candidateList.length, 1);
-    const score = nodes + branchSum * 70 + Math.log10(branchProduct) * 1200 + cellSpread(level.dogs) * 250;
+    const branchProduct = candidates.reduce((product, candidateList) => product * Math.max(candidateList.length, 1), 1);
+    const objectPressure = (level.bones.length * 650) + (level.trees.length * 750) + (level.flowers.length * 550) + (level.mud.length * 600);
+    const score = nodes + branchSum * 70 + Math.log10(branchProduct) * 1200 + cellSpread(level.dogs) * 250 + objectPressure;
 
     return {
         branchSum,
@@ -280,32 +306,53 @@ function levelSignature(level) {
     const dogs = level.dogs.map(cellKey).sort().join(';');
     const bones = level.bones.map(cellKey).sort().join(';');
     const trees = level.trees.map(cellKey).sort().join(';');
-    return `D:${dogs}|B:${bones}|T:${trees}`;
+    const flowers = level.flowers.map(cellKey).sort().join(';');
+    const mud = level.mud.map(cellKey).sort().join(';');
+    return `${level.pieceSet}|D:${dogs}|B:${bones}|T:${trees}|F:${flowers}|M:${mud}`;
 }
 
-function makeLevelFromTiling(tiling, tier, random) {
+function makeLevelFromTiling(tiling, chapter, random) {
+    const shuffledPaths = shuffle(tiling.paths, random);
+    const shuffledEmpties = shuffle(tiling.empties, random);
+    const bones = takeCells(shuffledPaths, chapter.bones);
+    if (!bones) return null;
+
+    const mud = takeCells(shuffledPaths.slice(chapter.bones), chapter.mud);
+    if (!mud) return null;
+
+    const trees = takeCells(shuffledEmpties, chapter.trees);
+    if (!trees) return null;
+
+    const flowers = takeCells(shuffledEmpties.slice(chapter.trees), chapter.flowers);
+    if (!flowers) return null;
+
     return {
+        pieceSet: chapter.pieceSet,
         dogs: tiling.dogs,
-        bones: sampleCombination(tiling.paths, tier.bones, random),
-        trees: sampleCombination(tiling.empties, tier.trees, random),
+        bones,
+        trees,
+        flowers,
+        mud,
         solution: tiling.solution
     };
 }
 
-function pickLevelsForTier(tier, random, usedSignatures) {
+function pickLevelsForChapter(chapter, runtime, random, usedSignatures) {
     const candidates = [];
-    const shuffledTilings = shuffle(tilings, random);
-    const maxAttempts = Math.min(shuffledTilings.length, 2800);
+    const shuffledTilings = shuffle(runtime.tilings, random);
+    const maxAttempts = Math.min(shuffledTilings.length, 4200);
 
     for (let i = 0; i < maxAttempts; i++) {
         const tiling = shuffledTilings[i];
 
-        for (let variant = 0; variant < 2; variant++) {
-            const level = makeLevelFromTiling(tiling, tier, random);
+        for (let variant = 0; variant < 3; variant++) {
+            const level = makeLevelFromTiling(tiling, chapter, random);
+            if (!level) continue;
+
             const signature = levelSignature(level);
             if (usedSignatures.has(signature)) continue;
 
-            const analysis = analyzeLevel(level);
+            const analysis = analyzeLevel(level, runtime);
             if (analysis.solutions !== 1) continue;
 
             candidates.push({ ...level, analysis, signature });
@@ -316,30 +363,34 @@ function pickLevelsForTier(tier, random, usedSignatures) {
 
     const selected = [];
     for (const candidate of candidates) {
-        if (selected.length >= tier.count) break;
-        if (candidate.analysis.score < tier.minScore && selected.length >= Math.ceil(tier.count * 0.7)) continue;
+        if (selected.length >= chapter.count) break;
+        if (candidate.analysis.score < chapter.minScore && selected.length >= Math.ceil(chapter.count * 0.75)) continue;
 
         selected.push(candidate);
         usedSignatures.add(candidate.signature);
     }
 
-    if (selected.length < tier.count) {
-        throw new Error(`Not enough levels for ${tier.group}. Needed ${tier.count}, got ${selected.length}.`);
+    if (selected.length < chapter.count) {
+        throw new Error(`Not enough levels for ${chapter.group}. Needed ${chapter.count}, got ${selected.length}.`);
     }
 
     selected.sort((a, b) => a.analysis.score - b.analysis.score);
     return selected;
 }
 
-function toOutputLevel(level, group) {
+function toOutputLevel(level, chapter) {
     const items = [];
     level.dogs.forEach((dog, index) => items.push({ type: index + 1, r: dog.r, c: dog.c }));
     level.bones.forEach(bone => items.push({ type: TYPES.BONE, r: bone.r, c: bone.c }));
     level.trees.forEach(tree => items.push({ type: TYPES.TREE, r: tree.r, c: tree.c }));
+    level.flowers.forEach(flower => items.push({ type: TYPES.FLOWER, r: flower.r, c: flower.c }));
+    level.mud.forEach(mud => items.push({ type: TYPES.MUD, r: mud.r, c: mud.c }));
 
     return {
-        group,
-        pieceSet: DEFAULT_PIECE_SET,
+        group: chapter.group,
+        chapter: chapter.group,
+        pieceSet: chapter.pieceSet,
+        difficultyRank: chapter.rank,
         difficultyScore: level.analysis.score,
         solverNodes: level.analysis.nodes,
         branchSum: level.analysis.branchSum,
@@ -349,26 +400,34 @@ function toOutputLevel(level, group) {
 }
 
 function main() {
-    console.log('Enumerating all piece tilings...');
-    enumerateTilings(0, []);
-    console.log(`Tilings: ${tilings.length}`);
-
     const random = makePrng(20260514);
+    const runtimes = {};
+
+    Object.keys(PIECE_SETS).forEach(pieceSetId => {
+        console.log(`Enumerating tilings for ${pieceSetId}...`);
+        runtimes[pieceSetId] = createRuntime(pieceSetId);
+        console.log(`${pieceSetId} tilings: ${runtimes[pieceSetId].tilings.length}`);
+    });
+
     const usedSignatures = new Set();
     const output = {};
     const reportRows = [];
     let levelId = 1;
 
-    TIERS.forEach(tier => {
-        console.log(`Selecting ${tier.group} levels...`);
-        const levels = pickLevelsForTier(tier, random, usedSignatures);
+    CHAPTERS.forEach(chapter => {
+        console.log(`Selecting ${chapter.group} levels...`);
+        const runtime = runtimes[chapter.pieceSet];
+        const levels = pickLevelsForChapter(chapter, runtime, random, usedSignatures);
         levels.forEach(level => {
-            output[levelId] = toOutputLevel(level, tier.group);
+            output[levelId] = toOutputLevel(level, chapter);
             reportRows.push({
                 id: levelId,
-                group: tier.group,
-                bones: tier.bones,
-                trees: tier.trees,
+                group: chapter.group,
+                pieceSet: chapter.pieceSet,
+                bones: chapter.bones,
+                trees: chapter.trees,
+                flowers: chapter.flowers,
+                mud: chapter.mud,
                 score: level.analysis.score,
                 nodes: level.analysis.nodes,
                 branchSum: level.analysis.branchSum
@@ -390,32 +449,27 @@ function main() {
         '',
         '## Current Difficulty Model',
         '',
-        'Levels are generated from verified full-board piece tilings. Dogs are placed on solution house cells, bones on solution path cells, and trees on solution empty cells. A level is accepted only when the solver confirms exactly one valid solution.',
+        'Levels are generated from verified full-board piece tilings. Dogs are placed on solution house cells, bones and mud on solution path cells, and trees and flowers on solution empty cells. A level is accepted only when the solver confirms exactly one valid solution.',
         '',
-        'The upgraded generator also ranks candidates by solver search cost, legal placement branch count, and dog spread. Later tiers use more bones and trees, but they are selected for high ambiguity rather than just higher obstacle count.',
+        'The upgraded generator ranks candidates by solver search cost, legal placement branch count, dog spread, object pressure, and chapter-specific piece grammar. Later chapters change how pieces read before simply adding more objects.',
         '',
-        '## Tier Rules',
+        '## Chapter Rules',
         '',
-        '| Tier | Count | Bones | Trees | Intent |',
-        '|---|---:|---:|---:|---|',
-        '| 入門 | 8 | 1 | 1 | Teach obstacle reading without empty boards. |',
-        '| 進階 | 10 | 2 | 1 | Add path obligations and early false starts. |',
-        '| 困難 | 10 | 2 | 2 | Mix path obligations with blocked empty cells. |',
-        '| 高手 | 10 | 3 | 2 | Require more elimination before committing pieces. |',
-        '| 燒腦 | 12 | 3 | 3 | High ambiguity and multiple tempting placements. |',
-        '| 地獄 | 10 | 4 | 3 | Dense constraints with unique-solution verification. |',
+        '| Chapter | Count | Piece Set | Bones | Trees | Flowers | Mud | Intent |',
+        '|---|---:|---|---:|---:|---:|---:|---|',
+        ...CHAPTERS.map(chapter => `| ${chapter.group} | ${chapter.count} | ${chapter.pieceSet} | ${chapter.bones} | ${chapter.trees} | ${chapter.flowers} | ${chapter.mud} | ${chapter.intent} |`),
         '',
         '## Generated Levels',
         '',
-        '| Level | Group | Bones | Trees | Difficulty Score | Solver Nodes | Branch Sum |',
-        '|---:|---|---:|---:|---:|---:|---:|',
-        ...reportRows.map(row => `| ${row.id} | ${row.group} | ${row.bones} | ${row.trees} | ${row.score} | ${row.nodes} | ${row.branchSum} |`),
+        '| Level | Chapter | Piece Set | Bones | Trees | Flowers | Mud | Difficulty Score | Solver Nodes | Branch Sum |',
+        '|---:|---|---|---:|---:|---:|---:|---:|---:|---:|',
+        ...reportRows.map(row => `| ${row.id} | ${row.group} | ${row.pieceSet} | ${row.bones} | ${row.trees} | ${row.flowers} | ${row.mud} | ${row.score} | ${row.nodes} | ${row.branchSum} |`),
         '',
         '## Follow-Up Suggestions',
         '',
-        '- Add a failure-aware hint system: first hint unlocks after 3 failed placements, deeper hints after 6 and 9.',
-        '- Add optional challenge badges for no-hint clears and low-move clears.',
-        '- Consider adding a fifth piece or alternate piece set for a true expert pack; this would require a separate GDD/ADR pass because it changes the core puzzle grammar.'
+        '- Add failure-aware hints: first hint unlocks after repeated failed placements, deeper hints after continued struggle.',
+        '- Add optional challenge badges for no-hint clears, low-move clears, and daily challenge clears.',
+        '- Add a later expert pack with five pieces or hole pieces once the chapter model is stable.'
     ].join('\n');
 
     fs.writeFileSync(reportPath, `${report}\n`, 'utf8');

@@ -39,6 +39,24 @@ const PIECE_SETS = {
             { id: 'C', baseShape: [[1, 1, 0], [0, 2, 1]] },
             { id: 'D', baseShape: [[2, 1], [1, 2]] }
         ]
+    },
+    garden: {
+        label: '花園拼塊',
+        pieces: [
+            { id: 'A', baseShape: [[2, 1, 1], [0, 1, 0]] },
+            { id: 'B', baseShape: [[1, 2, 0], [0, 1, 1]] },
+            { id: 'C', baseShape: [[1, 0], [1, 2], [1, 0]] },
+            { id: 'D', baseShape: [[2, 1], [1, 2]] }
+        ]
+    },
+    expert: {
+        label: '專家拼塊',
+        pieces: [
+            { id: 'A', baseShape: [[2, 1, 0], [0, 1, 1]] },
+            { id: 'B', baseShape: [[1, 2], [1, 0], [1, 0]] },
+            { id: 'C', baseShape: [[1, 1, 1], [0, 2, 0]] },
+            { id: 'D', baseShape: [[2, 1], [1, 2]] }
+        ]
     }
 };
 
@@ -75,9 +93,11 @@ function populateLevelSelect() {
         optgroup.label = group.name;
         group.options.forEach(({ id, orderIndex }) => {
             const option = document.createElement('option');
+            const lvl = GAME_LEVELS[id];
+            const pieceSet = PIECE_SETS[lvl.pieceSet || DEFAULT_PIECE_SET] || PIECE_SETS[DEFAULT_PIECE_SET];
             option.value = id;
             option.textContent = `關卡 ${orderIndex + 1}`;
-            option.title = `原始關卡 ${id}`;
+            option.title = `${lvl.group} / ${pieceSet.label}`;
             optgroup.appendChild(option);
         });
         levelSelect.appendChild(optgroup);
@@ -131,6 +151,7 @@ const modal = document.getElementById('victory-modal');
 const nextLevelBtn = document.getElementById('next-level-btn');
 const timeDisplay = document.getElementById('time-display');
 const movesDisplay = document.getElementById('moves-display');
+const levelSummaryEl = document.getElementById('level-summary');
 
 boardEl.tabIndex = 0;
 boardEl.setAttribute('role', 'grid');
@@ -193,6 +214,7 @@ function initGame() {
     }, 1000);
 
     loadLevel(currentLevel);
+    updateLevelSummary();
     renderBoard();
     initPieces();
 }
@@ -202,6 +224,29 @@ function updateStatsUI() {
     const m = Math.floor(timeElapsed / 60).toString().padStart(2, '0');
     const s = (timeElapsed % 60).toString().padStart(2, '0');
     timeDisplay.textContent = `${m}:${s}`;
+}
+
+function addSummaryBadge(text) {
+    const badge = document.createElement('span');
+    badge.className = 'level-badge';
+    badge.textContent = text;
+    levelSummaryEl.appendChild(badge);
+}
+
+function updateLevelSummary() {
+    if (!levelSummaryEl) return;
+
+    const levelData = getCurrentLevelData();
+    const pieceSet = getCurrentPieceSet();
+    const counts = getLevelItemCounts(levelData);
+    levelSummaryEl.innerHTML = '';
+
+    addSummaryBadge(levelData.chapter || levelData.group || '關卡');
+    addSummaryBadge(pieceSet.label);
+    if (counts.bones > 0) addSummaryBadge(`骨頭 ${counts.bones}`);
+    if (counts.trees > 0) addSummaryBadge(`大樹 ${counts.trees}`);
+    if (counts.flowers > 0) addSummaryBadge(`花圃 ${counts.flowers}`);
+    if (counts.mud > 0) addSummaryBadge(`泥地 ${counts.mud}`);
 }
 
 function addMove() {
@@ -765,7 +810,14 @@ function checkWinCondition() {
 }
 
 function getThresholds() {
-    const lvl = GAME_LEVELS[currentLevel];
+    const lvl = getCurrentLevelData();
+    if (lvl.difficultyRank) {
+        const extraPieces = Math.max(0, getCurrentPieces().length - 4);
+        return {
+            time: 45 + lvl.difficultyRank * 25 + extraPieces * 15,
+            moves: 10 + lvl.difficultyRank * 4 + extraPieces * 4
+        };
+    }
     if (lvl.group === '入門') return { time: 55, moves: 12 };
     if (lvl.group === '進階') return { time: 75, moves: 16 };
     if (lvl.group === '困難') return { time: 95, moves: 20 };
