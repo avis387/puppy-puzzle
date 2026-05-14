@@ -88,6 +88,7 @@ let timerInterval = null;
 let isPlaying = false;
 let keyboardSelection = null;
 let keyboardTarget = { r: 0, c: 0 };
+let hintStep = 0;
 
 function getMaxLevel() {
     return LEVEL_SEQUENCE[LEVEL_SEQUENCE.length - 1];
@@ -146,6 +147,7 @@ function initGame() {
     modal.classList.remove('active');
     document.getElementById('solution-modal').classList.remove('active');
     clearKeyboardSelection();
+    hintStep = 0;
     AudioSys.init();
     
     if (levelSelect.options.length === 0) {
@@ -746,21 +748,16 @@ levelSelect.addEventListener('change', (e) => {
 resetBtn.addEventListener('click', initGame);
 boardEl.addEventListener('keydown', onBoardKeyDown);
 
-solveBtn.addEventListener('click', () => {
-    const sol = GAME_LEVELS[currentLevel].solution;
-    if (!sol) {
-        alert('抱歉，此關卡解答建置中。');
-        return;
-    }
-    
+function renderHintBoard(placement) {
     const container = document.getElementById('solution-board-container');
     container.innerHTML = '';
+    container.style.display = placement ? 'flex' : 'none';
+
+    if (!placement) return;
     
-    // Create a mini board
     const miniBoard = document.createElement('div');
     miniBoard.className = 'board';
     
-    // Render base items
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
             const cell = document.createElement('div');
@@ -779,19 +776,65 @@ solveBtn.addEventListener('click', () => {
     const cellSize = getCellSize();
     const gap = getGap();
     
-    // Render solution pieces
-    sol.forEach((placement, idx) => {
-        const piece = { shape: placement.shape };
-        const el = document.createElement('div');
-        el.className = 'piece';
-        renderPieceDOM(piece, el);
-        miniBoard.appendChild(el);
-        el.style.left = `${(gap/2) + placement.c * (cellSize + gap)}px`;
-        el.style.top = `${(gap/2) + placement.r * (cellSize + gap)}px`;
-    });
+    const piece = { shape: placement.shape };
+    const el = document.createElement('div');
+    el.className = 'piece';
+    renderPieceDOM(piece, el);
+    miniBoard.appendChild(el);
+    el.style.left = `${(gap/2) + placement.c * (cellSize + gap)}px`;
+    el.style.top = `${(gap/2) + placement.r * (cellSize + gap)}px`;
     
     container.appendChild(miniBoard);
+}
+
+function getLevelItemCounts(levelData) {
+    return levelData.items.reduce((counts, item) => {
+        if (item.type === 6) counts.bones++;
+        if (item.type === 7) counts.trees++;
+        return counts;
+    }, { bones: 0, trees: 0 });
+}
+
+function showProgressiveHint() {
+    const levelData = GAME_LEVELS[currentLevel];
+    const solution = levelData.solution;
+    if (!solution) {
+        alert('抱歉，此關卡提示建置中。');
+        return;
+    }
+
+    hintStep++;
+
+    const counts = getLevelItemCounts(levelData);
+    const hintText = document.getElementById('hint-text');
+    const hintTitle = document.getElementById('hint-modal-title');
+
+    hintTitle.textContent = `💡 關卡提示 ${hintStep}`;
+
+    if (hintStep === 1) {
+        const extraRules = [];
+        if (counts.bones > 0) extraRules.push('骨頭必須由路徑覆蓋');
+        if (counts.trees > 0) extraRules.push('大樹不能被任何拼塊覆蓋');
+        hintText.textContent = extraRules.length > 0
+            ? `先處理限制最多的位置：${extraRules.join('，')}。`
+            : '先找小狗最集中的區域，房子格通常會先鎖定這些位置。';
+        renderHintBoard(null);
+    } else if (hintStep === 2) {
+        hintText.textContent = '優先嘗試有兩個房子的拼塊，因為它們最容易限制整體佈局。';
+        renderHintBoard(null);
+    } else {
+        const pieceIndex = (hintStep - 3) % solution.length;
+        const placement = solution[pieceIndex];
+        const pieceId = INITIAL_PIECES[pieceIndex].id;
+        hintText.textContent = `單塊提示：拼塊 ${pieceId} 的左上角可嘗試放在第 ${placement.r + 1} 列、第 ${placement.c + 1} 欄。`;
+        renderHintBoard(placement);
+    }
+
     document.getElementById('solution-modal').classList.add('active');
+}
+
+solveBtn.addEventListener('click', () => {
+    showProgressiveHint();
 });
 
 document.getElementById('close-solution-btn').addEventListener('click', () => {

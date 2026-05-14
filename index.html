@@ -27,7 +27,7 @@
                     </select>
                 </div>
                 <button id="toggle-mode-btn" class="btn" style="background: #9c27b0; color: white;" title="切換手機/電腦視圖">📱切換</button>
-                <button id="solve-btn" class="btn hint">💡 解答</button>
+                <button id="solve-btn" class="btn hint">💡 提示</button>
                 <button id="reset-btn" class="btn primary">重置</button>
             </div>
         </header>
@@ -74,8 +74,8 @@
         </div>
         <div id="solution-modal" class="modal">
             <div class="modal-content" style="border-top: 10px solid #03A9F4; transform: scale(1);">
-                <h2>💡 關卡解答</h2>
-                <p>仔細看好拼塊的位置，然後回去自己動手拼出來吧！</p>
+                <h2 id="hint-modal-title">💡 關卡提示</h2>
+                <p id="hint-text">先觀察小狗、骨頭與大樹的位置，再決定哪一塊最受限制。</p>
                 <div id="solution-board-container" style="margin: 2rem auto; display: flex; justify-content: center;"></div>
                 <button id="close-solution-btn" class="btn primary">我知道了！繼續挑戰</button>
             </div>
