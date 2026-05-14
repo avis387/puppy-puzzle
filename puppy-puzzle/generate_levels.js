@@ -16,7 +16,9 @@ const PIECES = PIECE_SETS[DEFAULT_PIECE_SET];
 
 const TYPES = {
     BONE: 6,
-    TREE: 7
+    TREE: 7,
+    FLOWER: 8,
+    MUD: 9
 };
 
 const TIERS = [
@@ -191,6 +193,8 @@ function isSoloPlacementValid(grid, shape, r, c) {
         if (boardValue >= 1 && boardValue <= 5 && cell.value === 1) return false;
         if (boardValue === TYPES.BONE && cell.value === 2) return false;
         if (boardValue === TYPES.TREE) return false;
+        if (boardValue === TYPES.FLOWER && cell.value === 1) return false;
+        if (boardValue === TYPES.MUD && cell.value === 2) return false;
     }
 
     return true;

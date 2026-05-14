@@ -17,17 +17,17 @@ function getGap() {
 }
 const TYPES = {
     WHITE: 1, BLACK: 2, GREY: 3, ORANGE: 4, BEIGE: 5,
-    BONE: 6, TREE: 7
+    BONE: 6, TREE: 7, FLOWER: 8, MUD: 9
 };
 
 const CLASSES = {
     1: 'dog-1', 2: 'dog-2', 3: 'dog-3', 4: 'dog-4', 5: 'dog-5',
-    6: 'bone', 7: 'tree'
+    6: 'bone', 7: 'tree', 8: 'flower', 9: 'mud'
 };
 
 const EMOJIS = {
     1: '🐶', 2: '🐺', 3: '🦝', 4: '🦊', 5: '🐕',
-    6: '🦴', 7: '🌲'
+    6: '🦴', 7: '🌲', 8: '🌷', 9: '🟫'
 };
 
 const PIECE_SETS = {
@@ -43,6 +43,10 @@ const PIECE_SETS = {
 };
 
 const DEFAULT_PIECE_SET = 'classic';
+
+function isDogType(value) {
+    return value >= TYPES.WHITE && value <= TYPES.BEIGE;
+}
 
 // Levels are now loaded globally from levels.js into GAME_LEVELS
 const LEVEL_SEQUENCE = Object.keys(GAME_LEVELS)
@@ -685,15 +689,17 @@ function isValidPlacement(piece, r, c) {
             
             const boardVal = boardState[br][bc];
             
-            if (boardVal >= 1 && boardVal <= 5) { // Dog
+            if (isDogType(boardVal)) { // Dog
                 if (val === 1) return false; // Path cannot cover dog
             }
-            if (boardVal === 7) { // Tree
+            if (boardVal === TYPES.TREE) { // Tree
                 return false; // Nothing can cover tree
             }
-            if (boardVal === 6) { // Bone
+            if (boardVal === TYPES.BONE) { // Bone
                 if (val === 2) return false; // House cannot cover bone
             }
+            if (boardVal === TYPES.FLOWER && val === 1) return false; // Path cannot cover flowers
+            if (boardVal === TYPES.MUD && val === 2) return false; // House cannot cover mud
             
             for (let i = 0; i < activePieces.length; i++) {
                 const other = activePieces[i];
@@ -727,10 +733,12 @@ function checkWinCondition() {
     let dogsCovered = 0;
     let bonesCovered = 0;
     let totalBones = 0;
+    let totalDogs = 0;
     
     for(let r=0; r<BOARD_SIZE; r++) {
         for(let c=0; c<BOARD_SIZE; c++) {
-            if (boardState[r][c] === 6) totalBones++;
+            if (isDogType(boardState[r][c])) totalDogs++;
+            if (boardState[r][c] === TYPES.BONE) totalBones++;
         }
     }
     
@@ -739,16 +747,16 @@ function checkWinCondition() {
             for (let pc = 0; pc < piece.shape[0].length; pc++) {
                 const br = piece.r + pr;
                 const bc = piece.c + pc;
-                if (piece.shape[pr][pc] === 2) { 
-                    if (boardState[br][bc] >= 1 && boardState[br][bc] <= 5) dogsCovered++;
+                if (piece.shape[pr][pc] === 2) {
+                    if (isDogType(boardState[br][bc])) dogsCovered++;
                 } else if (piece.shape[pr][pc] === 1) {
-                    if (boardState[br][bc] === 6) bonesCovered++;
+                    if (boardState[br][bc] === TYPES.BONE) bonesCovered++;
                 }
             }
         }
     });
     
-    if (dogsCovered === 5 && bonesCovered === totalBones) {
+    if (dogsCovered === totalDogs && bonesCovered === totalBones) {
         isPlaying = false;
         clearInterval(timerInterval);
         AudioSys.win();
@@ -848,10 +856,12 @@ function renderHintBoard(placement) {
 
 function getLevelItemCounts(levelData) {
     return levelData.items.reduce((counts, item) => {
-        if (item.type === 6) counts.bones++;
-        if (item.type === 7) counts.trees++;
+        if (item.type === TYPES.BONE) counts.bones++;
+        if (item.type === TYPES.TREE) counts.trees++;
+        if (item.type === TYPES.FLOWER) counts.flowers++;
+        if (item.type === TYPES.MUD) counts.mud++;
         return counts;
-    }, { bones: 0, trees: 0 });
+    }, { bones: 0, trees: 0, flowers: 0, mud: 0 });
 }
 
 function showProgressiveHint() {
@@ -874,6 +884,8 @@ function showProgressiveHint() {
         const extraRules = [];
         if (counts.bones > 0) extraRules.push('骨頭必須由路徑覆蓋');
         if (counts.trees > 0) extraRules.push('大樹不能被任何拼塊覆蓋');
+        if (counts.flowers > 0) extraRules.push('花圃不能被路徑覆蓋');
+        if (counts.mud > 0) extraRules.push('泥地不能被房子覆蓋');
         hintText.textContent = extraRules.length > 0
             ? `先處理限制最多的位置：${extraRules.join('，')}。`
             : '先找小狗最集中的區域，房子格通常會先鎖定這些位置。';

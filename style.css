@@ -182,6 +182,10 @@ select:focus-visible,
 :root.mobile-mode .tree {
     font-size: 1.6rem;
 }
+:root.mobile-mode .flower,
+:root.mobile-mode .mud {
+    font-size: 1.4rem;
+}
 :root.mobile-mode .game-area {
     flex-direction: column;
 }
@@ -268,6 +272,8 @@ select:focus-visible,
 
 .bone { border-color: #D7CCC8; background: #EFEBE9; color: #8D6E63; }
 .tree { border-color: #388E3C; background: #81C784; font-size: 2.2rem; border-radius: 12px; }
+.flower { border-color: #C2185B; background: #FCE4EC; color: #AD1457; font-size: 2rem; }
+.mud { border-color: #6D4C41; background: #8D6E63; color: #FBE9E7; font-size: 1.8rem; border-radius: 10px; }
 
 .panel-section {
     flex: 1;
