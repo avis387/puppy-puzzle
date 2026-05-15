@@ -403,34 +403,16 @@ function initPieces() {
         const selector = document.createElement('button');
         selector.className = 'piece-selector';
         selector.type = 'button';
-        selector.textContent = `拼塊 ${piece.id}`;
         selector.setAttribute('aria-label', `選擇拼塊 ${piece.id}`);
         selector.addEventListener('click', () => activatePiece(piece));
+        renderPieceSelector(piece, selector);
 
         piece.selectorEl = selector;
         piece.el = createPieceElement(piece, index);
         tray.appendChild(selector);
     });
 
-    setupInitialBoardPieces();
     updatePieceControls();
-}
-
-function setupInitialBoardPieces() {
-    const layout = findInitialBoardLayout();
-
-    layout.forEach((placement, index) => {
-        const piece = activePieces[index];
-        const el = piece.el;
-        piece.shape = cloneShape(placement.shape);
-        piece.r = placement.r;
-        piece.c = placement.c;
-        piece.isPlaced = true;
-        renderPieceDOM(piece, el);
-        boardEl.appendChild(el);
-        positionPieceOnBoard(piece, el);
-        el.classList.add('placed');
-    });
 }
 
 function positionPieceOnBoard(piece, el) {
@@ -440,106 +422,6 @@ function positionPieceOnBoard(piece, el) {
     el.style.position = 'absolute';
     el.style.left = `${(gap/2) + piece.c * cellStep}px`;
     el.style.top = `${(gap/2) + piece.r * cellStep}px`;
-}
-
-function findInitialBoardLayout() {
-    const levelData = getCurrentLevelData();
-    const candidates = activePieces.map((piece, index) => {
-        const solution = levelData.solution?.[index];
-        return getPlacementCandidates(piece, solution).slice(0, 90);
-    });
-    const layout = [];
-    const occupied = new Set();
-
-    function search(index) {
-        if (index >= activePieces.length) return !isLayoutSolved(layout);
-
-        for (const candidate of candidates[index]) {
-            if (candidate.cells.some(cell => occupied.has(cellKey(cell)))) continue;
-
-            layout[index] = candidate;
-            candidate.cells.forEach(cell => occupied.add(cellKey(cell)));
-            if (search(index + 1)) return true;
-            candidate.cells.forEach(cell => occupied.delete(cellKey(cell)));
-            layout[index] = undefined;
-        }
-
-        return false;
-    }
-
-    if (search(0)) {
-        return layout.map(placement => ({
-            r: placement.r,
-            c: placement.c,
-            shape: cloneShape(placement.shape)
-        }));
-    }
-
-    return levelData.solution.map(placement => ({
-        r: placement.r,
-        c: placement.c,
-        shape: cloneShape(placement.shape)
-    }));
-}
-
-function getPlacementCandidates(piece, solution) {
-    const candidates = [];
-    getShapeOrientations(piece.baseShape).forEach(shape => {
-        for (let r = 0; r <= BOARD_SIZE - shape.length; r++) {
-            for (let c = 0; c <= BOARD_SIZE - shape[0].length; c++) {
-                const cells = getSolidCells(shape, r, c);
-                if (!isFixedBoardPlacementValid(cells)) continue;
-                const sameAsSolution = solution
-                    && solution.r === r
-                    && solution.c === c
-                    && shapeKey(solution.shape) === shapeKey(shape);
-                candidates.push({ r, c, shape: cloneShape(shape), cells, sameAsSolution });
-            }
-        }
-    });
-
-    return candidates.sort((a, b) => {
-        if (a.sameAsSolution !== b.sameAsSolution) return a.sameAsSolution ? 1 : -1;
-        return (b.r + b.c) - (a.r + a.c);
-    });
-}
-
-function getSolidCells(shape, r, c) {
-    const cells = [];
-    for (let pr = 0; pr < shape.length; pr++) {
-        for (let pc = 0; pc < shape[pr].length; pc++) {
-            if (shape[pr][pc] !== 0) cells.push({ r: r + pr, c: c + pc, value: shape[pr][pc] });
-        }
-    }
-    return cells;
-}
-
-function getCutoutCells(shape, r, c) {
-    const cells = [];
-    for (let pr = 0; pr < shape.length; pr++) {
-        for (let pc = 0; pc < shape[pr].length; pc++) {
-            if (shape[pr][pc] === 0) cells.push({ r: r + pr, c: c + pc });
-        }
-    }
-    return cells;
-}
-
-function isFixedBoardPlacementValid(cells) {
-    return cells.every(cell => {
-        if (cell.r < 0 || cell.r >= BOARD_SIZE || cell.c < 0 || cell.c >= BOARD_SIZE) return false;
-
-        const boardVal = boardState[cell.r][cell.c];
-        if (isDogType(boardVal) && isPathType(cell.value)) return false;
-        if (boardVal === TYPES.BONE && isHouseType(cell.value)) return false;
-        if (boardVal === TYPES.TREE || boardVal === TYPES.HOLE || boardVal === TYPES.FENCE) return false;
-        if (boardVal === TYPES.FLOWER && isPathType(cell.value)) return false;
-        if (boardVal === TYPES.MUD && isHouseType(cell.value)) return false;
-        return true;
-    });
-}
-
-function cellKey(cell) {
-    return `${cell.r},${cell.c}`;
 }
 
 function createPieceElement(piece, index) {
@@ -560,6 +442,42 @@ function createPieceElement(piece, index) {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
 
     return el;
+}
+
+function renderPieceSelector(piece, selector) {
+    selector.innerHTML = '';
+
+    const label = document.createElement('span');
+    label.className = 'piece-selector-label';
+    label.textContent = piece.id;
+    selector.appendChild(label);
+
+    const icon = document.createElement('span');
+    icon.className = 'piece-selector-icon';
+    piece.baseShape.forEach(row => {
+        const rowEl = document.createElement('span');
+        rowEl.className = 'mini-piece-row';
+        row.forEach(value => {
+            const block = document.createElement('span');
+            block.className = 'mini-piece-block';
+            if (value === 1) block.classList.add('mini-path');
+            else if (value === 2) block.classList.add('mini-house');
+            else block.classList.add('mini-empty');
+            rowEl.appendChild(block);
+        });
+        icon.appendChild(rowEl);
+    });
+    selector.appendChild(icon);
+
+    const check = document.createElement('span');
+    check.className = 'piece-selector-check';
+    check.textContent = '✓';
+    selector.appendChild(check);
+}
+
+function updatePieceSelectorLabel(piece) {
+    const check = piece.selectorEl?.querySelector('.piece-selector-check');
+    if (check) check.hidden = !piece.isPlaced;
 }
 
 function canActivatePiece(piece) {
@@ -617,8 +535,8 @@ function updatePieceControls() {
 
     activePieceTitle.textContent = hasActive ? `正在操作：拼塊 ${activePiece.id}` : '選一塊拼塊';
     activePieceStatus.textContent = hasActive
-        ? '先把這塊放回底盤，才能切換下一塊。'
-        : '點選拼塊後，可旋轉、翻轉，再點底盤格子放置。';
+        ? '先把這塊放到底盤，才能切換下一塊。'
+        : '點選上方縮小拼塊後，可旋轉、翻轉，再點底盤格子放置。';
 
     activePieces.forEach(piece => {
         const selector = piece.selectorEl;
@@ -628,7 +546,7 @@ function updatePieceControls() {
         selector.classList.toggle('placed', piece.isPlaced);
         selector.classList.toggle('locked', hasActive && activePiece !== piece);
         selector.disabled = hasActive && activePiece !== piece;
-        selector.textContent = piece.isPlaced ? `拼塊 ${piece.id} ✓` : `拼塊 ${piece.id}`;
+        updatePieceSelectorLabel(piece);
     });
 }
 
