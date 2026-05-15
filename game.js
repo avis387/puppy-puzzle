@@ -180,7 +180,10 @@ const levelSelect = document.getElementById('level-select');
 const resetBtn = document.getElementById('reset-btn');
 const solveBtn = document.getElementById('solve-btn');
 const dailyBtn = document.getElementById('daily-btn');
+const instructionsBtn = document.getElementById('instructions-btn');
 const modal = document.getElementById('victory-modal');
+const instructionsModal = document.getElementById('instructions-modal');
+const closeInstructionsBtn = document.getElementById('close-instructions-btn');
 const nextLevelBtn = document.getElementById('next-level-btn');
 const timeDisplay = document.getElementById('time-display');
 const movesDisplay = document.getElementById('moves-display');
@@ -230,6 +233,7 @@ const AudioSys = {
 function initGame() {
     modal.classList.remove('active');
     document.getElementById('solution-modal').classList.remove('active');
+    instructionsModal.classList.remove('active');
     clearKeyboardSelection();
     hintStep = 0;
     AudioSys.init();
@@ -1349,10 +1353,30 @@ levelSelect.addEventListener('change', (e) => {
 resetBtn.addEventListener('click', initGame);
 boardEl.addEventListener('keydown', onBoardKeyDown);
 boardEl.addEventListener('click', onBoardClick);
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !instructionsModal.classList.contains('active')) return;
+    e.preventDefault();
+    instructionsModal.classList.remove('active');
+    instructionsBtn.focus();
+});
 document.addEventListener('keydown', onGlobalKeyboardControl);
 rotatePieceBtn.addEventListener('click', () => transformActivePiece(rotatePiece));
 flipPieceBtn.addEventListener('click', () => transformActivePiece(flipPiece));
 recallPieceBtn.addEventListener('click', recallActivePiece);
+instructionsBtn.addEventListener('click', () => {
+    instructionsModal.classList.add('active');
+    announceStatus('已開啟玩法說明。');
+});
+closeInstructionsBtn.addEventListener('click', () => {
+    instructionsModal.classList.remove('active');
+    instructionsBtn.focus();
+});
+instructionsModal.addEventListener('click', (e) => {
+    if (e.target === instructionsModal) {
+        instructionsModal.classList.remove('active');
+        instructionsBtn.focus();
+    }
+});
 
 function getDailyLevelId() {
     const today = new Date();

@@ -36,7 +36,7 @@ body {
 }
 
 .game-wrapper {
-    max-width: 1000px;
+    max-width: 1220px;
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -154,6 +154,22 @@ select {
     box-shadow: none;
 }
 
+.btn.guide {
+    background: #F59E0B;
+    color: white;
+    box-shadow: 0 4px 0 #B45309;
+}
+
+.btn.guide:hover {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #B45309;
+}
+
+.btn.guide:active {
+    transform: translateY(4px);
+    box-shadow: none;
+}
+
 .btn:focus-visible,
 select:focus-visible,
 .piece-selector:focus-visible,
@@ -165,10 +181,20 @@ select:focus-visible,
 
 .game-area {
     display: grid;
-    grid-template-columns: minmax(360px, max-content) minmax(0, 1fr);
-    gap: 3rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
     align-items: start;
     justify-content: center;
+}
+
+.play-section {
+    display: grid;
+    grid-template-columns: max-content minmax(300px, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    min-width: 0;
+    justify-self: center;
+    width: 100%;
 }
 
 :root.mobile-mode {
@@ -223,10 +249,16 @@ select:focus-visible,
     gap: 1.25rem;
 }
 :root.mobile-mode .panel-section {
-    flex-direction: column-reverse;
+    flex-direction: column;
+}
+
+:root.mobile-mode .play-section {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
 }
 
 :root.mobile-mode .piece-control-panel {
+    width: 100%;
     padding: 0.85rem;
     gap: 0.75rem;
 }
@@ -256,6 +288,16 @@ select:focus-visible,
 :root.mobile-mode .level-summary {
     justify-content: center;
     padding: 0.75rem;
+}
+
+:root.mobile-mode .rule-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+:root.mobile-mode .guide-modal-content {
+    width: min(94vw, 560px);
+    max-height: 84vh;
+    padding: 1.25rem;
 }
 
 :root.mobile-mode .level-badge {
@@ -353,11 +395,7 @@ select:focus-visible,
 }
 
 .instructions {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 1.5rem 2rem;
-    border-radius: 16px;
-    box-shadow: var(--shadow);
-    border-left: 6px solid #FFCA28;
+    min-width: 0;
 }
 
 .instructions h3 {
@@ -366,10 +404,55 @@ select:focus-visible,
     font-size: 1.3rem;
 }
 
-.instructions ul {
-    padding-left: 1.5rem;
-    line-height: 1.8;
+.rule-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.rule-card {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 0.65rem;
+    align-items: start;
+    min-height: 86px;
+    padding: 0.85rem;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(47, 125, 74, 0.16);
+    border-left: 4px solid #FFCA28;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.rule-card-wide {
+    grid-column: 1 / -1;
+}
+
+.rule-card > .rule-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: #F1F8E9;
+    border: 1px solid rgba(47, 125, 74, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+}
+
+.rule-card b {
+    display: block;
+    color: var(--primary-dark);
+    font-size: 0.96rem;
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+}
+
+.rule-card div span {
+    display: block;
     color: #444;
+    font-size: 0.86rem;
+    line-height: 1.45;
 }
 
 .level-summary {
@@ -409,6 +492,7 @@ select:focus-visible,
     gap: 1rem;
     position: relative;
     overflow: visible;
+    min-width: 0;
 }
 
 .piece-picker {
@@ -523,9 +607,10 @@ select:focus-visible,
 
 .active-piece-slot {
     position: relative;
-    width: 100%;
-    min-width: var(--active-slot-width, 180px);
+    width: min(100%, var(--active-slot-width, 180px));
+    min-width: 0;
     min-height: var(--active-slot-height, 160px);
+    justify-self: center;
     background: rgba(255,255,255,0.75);
     border: 2px solid rgba(47, 125, 74, 0.2);
     border-radius: 14px;
@@ -544,7 +629,7 @@ select:focus-visible,
 .piece-actions {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
 }
 
@@ -685,6 +770,7 @@ select:focus-visible,
     display: none;
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
+    padding: 1rem;
     background: rgba(0,0,0,0.6);
     backdrop-filter: blur(5px);
     justify-content: center;
@@ -706,6 +792,26 @@ select:focus-visible,
     transform: scale(0.9);
     animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
     border-top: 10px solid #FF9800;
+}
+
+.guide-modal-content {
+    width: min(92vw, 760px);
+    max-height: 88vh;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.guide-modal-content h2 {
+    text-align: center;
+}
+
+.guide-modal-content .rule-card-grid {
+    margin-bottom: 1.5rem;
+}
+
+.guide-modal-content .btn {
+    display: block;
+    margin: 0 auto;
 }
 
 .stars-container {
@@ -850,6 +956,16 @@ select:focus-visible,
 
     .game-area {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .play-section {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+    }
+
+    .piece-control-panel {
+        width: 100%;
+        max-width: 560px;
     }
 
     .board-section {

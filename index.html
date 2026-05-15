@@ -28,33 +28,20 @@
                 </div>
                 <button id="toggle-mode-btn" class="btn" style="background: #9c27b0; color: white;" title="切換手機/電腦視圖">📱切換</button>
                 <button id="daily-btn" class="btn challenge" title="跳到今日挑戰關卡">今日</button>
+                <button id="instructions-btn" class="btn guide" type="button">📖 玩法</button>
                 <button id="solve-btn" class="btn hint">💡 提示</button>
                 <button id="reset-btn" class="btn primary">重置</button>
             </div>
         </header>
         
         <main class="game-area">
-            <div class="board-section">
-                <div id="board" class="board"></div>
-            </div>
-            
-            <div class="panel-section">
-                <div class="instructions">
-                    <h3>💡 玩法說明</h3>
-                    <ul>
-                        <li><b>房子</b> 必須蓋在小狗上。</li>
-                        <li><b>路徑</b> 絕對不能蓋到小狗。</li>
-                        <li><b>骨頭</b> 必須被路徑蓋住。</li>
-                        <li><b>大樹</b> 不能被任何東西蓋住。</li>
-                        <li><b>花圃</b> 不能被路徑蓋住，<b>泥地</b> 不能被房子蓋住。</li>
-                        <li><b>地洞</b> 要對準拼塊空洞，<b>柵欄</b> 不能被蓋住。</li>
-                        <li>大師篇要求所有路徑相連。</li>
-                        <li><b>操作</b> 點選上方縮小拼塊後，會進入下方擺盤；可旋轉、翻轉，再點底盤格子或拖曳放置。</li>
-                        <li>一次只能操作一塊拼塊；放到底盤後才能選下一塊。</li>
-                    </ul>
+            <section class="play-section" aria-label="遊戲操作區">
+                <div class="board-section">
+                    <div id="board" class="board"></div>
                 </div>
-                <div id="level-summary" class="level-summary" aria-live="polite"></div>
+
                 <div class="piece-control-panel">
+                    <div id="level-summary" class="level-summary" aria-live="polite"></div>
                     <div id="pieces-tray" class="piece-picker" aria-label="拼塊選擇列"></div>
                     <div class="active-piece-panel">
                         <div id="active-piece-slot" class="active-piece-slot"></div>
@@ -65,7 +52,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
         </main>
         
         <div id="victory-modal" class="modal">
@@ -89,6 +76,46 @@
                 <p id="hint-text">先觀察小狗、骨頭與大樹的位置，再決定哪一塊最受限制。</p>
                 <div id="solution-board-container" style="margin: 2rem auto; display: flex; justify-content: center;"></div>
                 <button id="close-solution-btn" class="btn primary">我知道了！繼續挑戰</button>
+            </div>
+        </div>
+        <div id="instructions-modal" class="modal">
+            <div class="modal-content guide-modal-content">
+                <h2>📖 玩法說明</h2>
+                <div class="rule-card-grid">
+                    <div class="rule-card">
+                        <span class="rule-icon">🏠</span>
+                        <div><b>房子</b><span>必須蓋在小狗上。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🐾</span>
+                        <div><b>路徑</b><span>絕對不能蓋到小狗。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🦴</span>
+                        <div><b>骨頭</b><span>必須被路徑蓋住。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🌲</span>
+                        <div><b>大樹</b><span>不能被任何東西蓋住。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🌷</span>
+                        <div><b>花圃 / 泥地</b><span>花圃不能被路徑蓋住，泥地不能被房子蓋住。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🕳️</span>
+                        <div><b>地洞 / 柵欄</b><span>地洞要對準拼塊空洞，柵欄不能被蓋住。</span></div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-icon">🔗</span>
+                        <div><b>大師篇</b><span>所有路徑必須互相連通。</span></div>
+                    </div>
+                    <div class="rule-card rule-card-wide">
+                        <span class="rule-icon">☝️</span>
+                        <div><b>操作</b><span>點縮小拼塊進入擺盤；可旋轉、翻轉，再點底盤格或拖曳放置。一次只能操作一塊。</span></div>
+                    </div>
+                </div>
+                <button id="close-instructions-btn" class="btn primary">開始挑戰</button>
             </div>
         </div>
         <div id="assistive-status" class="sr-only" aria-live="polite"></div>
