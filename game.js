@@ -138,6 +138,7 @@ let activePieces = [];
 let draggingPiece = null;
 let activePiece = null;
 let activePieceEl = null;
+let activePieceStartedPlaced = false;
 
 let moves = 0;
 let timeElapsed = 0;
@@ -387,6 +388,7 @@ function initPieces() {
     activePieceSlot.classList.add('empty');
     activePiece = null;
     activePieceEl = null;
+    activePieceStartedPlaced = false;
 
     activePieces = getCurrentPieces().map((p, index) => ({
         ...p,
@@ -495,6 +497,7 @@ function activatePiece(piece) {
     }
 
     const el = piece.el;
+    activePieceStartedPlaced = piece.isPlaced;
     activePiece = piece;
     activePieceEl = el;
 
@@ -520,6 +523,7 @@ function activatePiece(piece) {
 function clearActivePieceAfterPlacement() {
     activePiece = null;
     activePieceEl = null;
+    activePieceStartedPlaced = false;
     activePieceSlot.innerHTML = '';
     activePieceSlot.classList.add('empty');
     sizeActivePieceSlot(null);
@@ -775,9 +779,7 @@ function onPieceKeyDown(e, piece, el) {
         announceStatus('已取消選取拼塊。');
     } else if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
-        returnToTray(el, piece);
-        addMove();
-        announceStatus(`拼塊 ${piece.id} 已回到托盤。`);
+        recallActivePiece();
     }
 }
 
@@ -813,9 +815,7 @@ function onBoardKeyDown(e) {
         transformActivePiece(flipPiece);
     } else if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
-        returnToTray(el, piece);
-        addMove();
-        announceStatus(`拼塊 ${piece.id} 已回到托盤。`);
+        recallActivePiece();
     }
 }
 
@@ -884,6 +884,7 @@ function onDragStart(e) {
 
     if (e.type === 'touchstart') e.preventDefault(); // Prevent scroll
     clearKeyboardSelection();
+    activePieceStartedPlaced = piece.isPlaced;
     activePiece = piece;
     activePieceEl = el;
     
@@ -1023,6 +1024,45 @@ function returnToTray(el, piece) {
     sizeActivePieceSlot(piece);
     activePieceSlot.appendChild(el);
     updatePieceControls();
+}
+
+function resetPieceToOriginal(piece, el) {
+    piece.shape = cloneShape(piece.baseShape);
+    piece.isPlaced = false;
+    piece.r = -1;
+    piece.c = -1;
+
+    el.classList.remove('placed', 'keyboard-selected', 'invalid-placement');
+    el.style.position = 'relative';
+    el.style.left = '';
+    el.style.top = '';
+    renderPieceDOM(piece, el);
+}
+
+function recallActivePiece() {
+    if (!activePiece || !activePieceEl || activePiece.isPlaced) return;
+
+    const piece = activePiece;
+    const el = activePieceEl;
+    const shouldCountMove = activePieceStartedPlaced;
+
+    clearKeyboardSelection();
+    resetPieceToOriginal(piece, el);
+
+    if (el.parentNode) {
+        el.parentNode.removeChild(el);
+    }
+
+    activePiece = null;
+    activePieceEl = null;
+    activePieceStartedPlaced = false;
+    activePieceSlot.innerHTML = '';
+    activePieceSlot.classList.add('empty');
+    sizeActivePieceSlot(null);
+
+    if (shouldCountMove) addMove();
+    updatePieceControls();
+    announceStatus(`拼塊 ${piece.id} 已收回原始狀態。`);
 }
 
 function isValidPlacement(piece, r, c) {
@@ -1308,11 +1348,7 @@ boardEl.addEventListener('click', onBoardClick);
 document.addEventListener('keydown', onGlobalKeyboardControl);
 rotatePieceBtn.addEventListener('click', () => transformActivePiece(rotatePiece));
 flipPieceBtn.addEventListener('click', () => transformActivePiece(flipPiece));
-recallPieceBtn.addEventListener('click', () => {
-    if (!activePiece || !activePieceEl || activePiece.isPlaced) return;
-    returnToTray(activePieceEl, activePiece);
-    announceStatus(`拼塊 ${activePiece.id} 已回到操作擺盤。`);
-});
+recallPieceBtn.addEventListener('click', recallActivePiece);
 
 function getDailyLevelId() {
     const today = new Date();
