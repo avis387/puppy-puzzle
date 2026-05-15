@@ -516,35 +516,14 @@ select:focus-visible,
 
 .active-piece-panel {
     display: grid;
-    grid-template-columns: minmax(170px, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     align-items: stretch;
 }
 
-.active-piece-copy {
-    background: rgba(0,0,0,0.02);
-    border-radius: 12px;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.35rem;
-    color: #444;
-}
-
-#active-piece-title {
-    color: var(--primary-dark);
-    font-size: 1.1rem;
-    font-weight: 900;
-}
-
-#active-piece-status {
-    font-size: 0.9rem;
-    line-height: 1.45;
-}
-
 .active-piece-slot {
     position: relative;
+    width: 100%;
     min-width: var(--active-slot-width, 180px);
     min-height: var(--active-slot-height, 160px);
     background: rgba(255,255,255,0.75);

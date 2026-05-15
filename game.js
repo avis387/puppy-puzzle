@@ -537,10 +537,14 @@ function updatePieceControls() {
     flipPieceBtn.disabled = !hasActive;
     recallPieceBtn.disabled = !hasActive;
 
-    activePieceTitle.textContent = hasActive ? `正在操作：拼塊 ${activePiece.id}` : '選一塊拼塊';
-    activePieceStatus.textContent = hasActive
-        ? '先把這塊放到底盤，才能切換下一塊。'
-        : '點選上方縮小拼塊後，可旋轉、翻轉，再點底盤格子放置。';
+    if (activePieceTitle) {
+        activePieceTitle.textContent = hasActive ? `正在操作：拼塊 ${activePiece.id}` : '選一塊拼塊';
+    }
+    if (activePieceStatus) {
+        activePieceStatus.textContent = hasActive
+            ? '先把這塊放到底盤，才能切換下一塊。'
+            : '點選上方縮小拼塊後，可旋轉、翻轉，再點底盤格子放置。';
+    }
 
     activePieces.forEach(piece => {
         const selector = piece.selectorEl;
