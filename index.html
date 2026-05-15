@@ -49,12 +49,27 @@
                         <li><b>花圃</b> 不能被路徑蓋住，<b>泥地</b> 不能被房子蓋住。</li>
                         <li><b>地洞</b> 要對準拼塊空洞，<b>柵欄</b> 不能被蓋住。</li>
                         <li>大師篇要求所有路徑相連。</li>
-                        <li>單擊旋轉，右鍵(或雙指)翻轉。</li>
+                        <li>一次只能操作一塊拼塊；放回底盤後才能選下一塊。</li>
+                        <li>下方擺盤可旋轉、翻轉；點底盤格子或拖曳放置。</li>
                         <li>鍵盤：Tab 移到拼塊，方向鍵選格，R 旋轉，F 翻轉，Enter 放置。</li>
                     </ul>
                 </div>
                 <div id="level-summary" class="level-summary" aria-live="polite"></div>
-                <div id="pieces-tray" class="pieces-tray" aria-label="拼塊托盤"></div>
+                <div class="piece-control-panel">
+                    <div id="pieces-tray" class="piece-picker" aria-label="拼塊選擇列"></div>
+                    <div class="active-piece-panel">
+                        <div class="active-piece-copy">
+                            <span id="active-piece-title">選一塊拼塊</span>
+                            <span id="active-piece-status">放回底盤後才能切換下一塊</span>
+                        </div>
+                        <div id="active-piece-slot" class="active-piece-slot"></div>
+                        <div class="piece-actions">
+                            <button id="rotate-piece-btn" class="btn piece-action" type="button">旋轉</button>
+                            <button id="flip-piece-btn" class="btn piece-action" type="button">翻轉</button>
+                            <button id="recall-piece-btn" class="btn piece-action muted" type="button">收回</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
         

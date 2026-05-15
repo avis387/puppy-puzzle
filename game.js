@@ -136,6 +136,8 @@ let currentLevel = LEVEL_SEQUENCE[0];
 let boardState = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
 let activePieces = [];
 let draggingPiece = null;
+let activePiece = null;
+let activePieceEl = null;
 
 let moves = 0;
 let timeElapsed = 0;
@@ -182,6 +184,12 @@ const nextLevelBtn = document.getElementById('next-level-btn');
 const timeDisplay = document.getElementById('time-display');
 const movesDisplay = document.getElementById('moves-display');
 const levelSummaryEl = document.getElementById('level-summary');
+const activePieceSlot = document.getElementById('active-piece-slot');
+const activePieceTitle = document.getElementById('active-piece-title');
+const activePieceStatus = document.getElementById('active-piece-status');
+const rotatePieceBtn = document.getElementById('rotate-piece-btn');
+const flipPieceBtn = document.getElementById('flip-piece-btn');
+const recallPieceBtn = document.getElementById('recall-piece-btn');
 
 boardEl.tabIndex = 0;
 boardEl.setAttribute('role', 'grid');
@@ -375,6 +383,10 @@ function renderBoard() {
 function initPieces() {
     const tray = document.getElementById('pieces-tray');
     tray.innerHTML = '';
+    activePieceSlot.innerHTML = '';
+    activePieceSlot.classList.add('empty');
+    activePiece = null;
+    activePieceEl = null;
 
     activePieces = getCurrentPieces().map((p, index) => ({
         ...p,
@@ -382,43 +394,255 @@ function initPieces() {
         shape: JSON.parse(JSON.stringify(p.baseShape)),
         isPlaced: false,
         r: -1,
-        c: -1
+        c: -1,
+        el: null,
+        selectorEl: null
     }));
 
     activePieces.forEach((piece, index) => {
-        const slot = document.createElement('div');
-        slot.className = 'tray-slot';
-        slot.id = `slot-${index}`;
-        sizeTraySlot(slot, piece);
-        tray.appendChild(slot);
-        
-        const el = document.createElement('div');
-        el.className = 'piece';
-        el.dataset.index = index;
-        el.style.position = 'relative'; // Flex centering in slot
-        el.tabIndex = 0;
-        el.setAttribute('role', 'button');
-        el.setAttribute('aria-label', `拼塊 ${piece.id}。按 Enter 選取，方向鍵選格，R 旋轉，F 翻轉，Enter 放置。`);
-        
-        renderPieceDOM(piece, el);
-        
-        // Mouse & Touch Events
-        el.addEventListener('mousedown', onDragStart);
-        el.addEventListener('touchstart', onDragStart, {passive: false});
-        el.addEventListener('focus', () => selectPieceWithKeyboard(piece, el));
-        el.addEventListener('keydown', (e) => onPieceKeyDown(e, piece, el));
-        
-        el.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            AudioSys.rotate();
-            flipPiece(piece);
-            addMove();
-            renderPieceDOM(piece, el);
-            if (piece.isPlaced) checkPlacement(piece, el);
-        });
+        const selector = document.createElement('button');
+        selector.className = 'piece-selector';
+        selector.type = 'button';
+        selector.textContent = `拼塊 ${piece.id}`;
+        selector.setAttribute('aria-label', `選擇拼塊 ${piece.id}`);
+        selector.addEventListener('click', () => activatePiece(piece));
 
-        slot.appendChild(el);
+        piece.selectorEl = selector;
+        piece.el = createPieceElement(piece, index);
+        tray.appendChild(selector);
     });
+
+    setupInitialBoardPieces();
+    updatePieceControls();
+}
+
+function setupInitialBoardPieces() {
+    const layout = findInitialBoardLayout();
+
+    layout.forEach((placement, index) => {
+        const piece = activePieces[index];
+        const el = piece.el;
+        piece.shape = cloneShape(placement.shape);
+        piece.r = placement.r;
+        piece.c = placement.c;
+        piece.isPlaced = true;
+        renderPieceDOM(piece, el);
+        boardEl.appendChild(el);
+        positionPieceOnBoard(piece, el);
+        el.classList.add('placed');
+    });
+}
+
+function positionPieceOnBoard(piece, el) {
+    const cellSize = getCellSize();
+    const gap = getGap();
+    const cellStep = cellSize + gap;
+    el.style.position = 'absolute';
+    el.style.left = `${(gap/2) + piece.c * cellStep}px`;
+    el.style.top = `${(gap/2) + piece.r * cellStep}px`;
+}
+
+function findInitialBoardLayout() {
+    const levelData = getCurrentLevelData();
+    const candidates = activePieces.map((piece, index) => {
+        const solution = levelData.solution?.[index];
+        return getPlacementCandidates(piece, solution).slice(0, 90);
+    });
+    const layout = [];
+    const occupied = new Set();
+
+    function search(index) {
+        if (index >= activePieces.length) return !isLayoutSolved(layout);
+
+        for (const candidate of candidates[index]) {
+            if (candidate.cells.some(cell => occupied.has(cellKey(cell)))) continue;
+
+            layout[index] = candidate;
+            candidate.cells.forEach(cell => occupied.add(cellKey(cell)));
+            if (search(index + 1)) return true;
+            candidate.cells.forEach(cell => occupied.delete(cellKey(cell)));
+            layout[index] = undefined;
+        }
+
+        return false;
+    }
+
+    if (search(0)) {
+        return layout.map(placement => ({
+            r: placement.r,
+            c: placement.c,
+            shape: cloneShape(placement.shape)
+        }));
+    }
+
+    return levelData.solution.map(placement => ({
+        r: placement.r,
+        c: placement.c,
+        shape: cloneShape(placement.shape)
+    }));
+}
+
+function getPlacementCandidates(piece, solution) {
+    const candidates = [];
+    getShapeOrientations(piece.baseShape).forEach(shape => {
+        for (let r = 0; r <= BOARD_SIZE - shape.length; r++) {
+            for (let c = 0; c <= BOARD_SIZE - shape[0].length; c++) {
+                const cells = getSolidCells(shape, r, c);
+                if (!isFixedBoardPlacementValid(cells)) continue;
+                const sameAsSolution = solution
+                    && solution.r === r
+                    && solution.c === c
+                    && shapeKey(solution.shape) === shapeKey(shape);
+                candidates.push({ r, c, shape: cloneShape(shape), cells, sameAsSolution });
+            }
+        }
+    });
+
+    return candidates.sort((a, b) => {
+        if (a.sameAsSolution !== b.sameAsSolution) return a.sameAsSolution ? 1 : -1;
+        return (b.r + b.c) - (a.r + a.c);
+    });
+}
+
+function getSolidCells(shape, r, c) {
+    const cells = [];
+    for (let pr = 0; pr < shape.length; pr++) {
+        for (let pc = 0; pc < shape[pr].length; pc++) {
+            if (shape[pr][pc] !== 0) cells.push({ r: r + pr, c: c + pc, value: shape[pr][pc] });
+        }
+    }
+    return cells;
+}
+
+function getCutoutCells(shape, r, c) {
+    const cells = [];
+    for (let pr = 0; pr < shape.length; pr++) {
+        for (let pc = 0; pc < shape[pr].length; pc++) {
+            if (shape[pr][pc] === 0) cells.push({ r: r + pr, c: c + pc });
+        }
+    }
+    return cells;
+}
+
+function isFixedBoardPlacementValid(cells) {
+    return cells.every(cell => {
+        if (cell.r < 0 || cell.r >= BOARD_SIZE || cell.c < 0 || cell.c >= BOARD_SIZE) return false;
+
+        const boardVal = boardState[cell.r][cell.c];
+        if (isDogType(boardVal) && isPathType(cell.value)) return false;
+        if (boardVal === TYPES.BONE && isHouseType(cell.value)) return false;
+        if (boardVal === TYPES.TREE || boardVal === TYPES.HOLE || boardVal === TYPES.FENCE) return false;
+        if (boardVal === TYPES.FLOWER && isPathType(cell.value)) return false;
+        if (boardVal === TYPES.MUD && isHouseType(cell.value)) return false;
+        return true;
+    });
+}
+
+function cellKey(cell) {
+    return `${cell.r},${cell.c}`;
+}
+
+function createPieceElement(piece, index) {
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.dataset.index = index;
+    el.style.position = 'relative';
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `拼塊 ${piece.id}。按 Enter 選取，方向鍵選格，R 旋轉，F 翻轉，Enter 放置。`);
+
+    renderPieceDOM(piece, el);
+
+    el.addEventListener('mousedown', onDragStart);
+    el.addEventListener('touchstart', onDragStart, {passive: false});
+    el.addEventListener('focus', () => selectPieceWithKeyboard(piece, el));
+    el.addEventListener('keydown', (e) => onPieceKeyDown(e, piece, el));
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    return el;
+}
+
+function canActivatePiece(piece) {
+    if (!activePiece || activePiece === piece || activePiece.isPlaced) return true;
+
+    announceStatus(`請先把拼塊 ${activePiece.id} 放回底盤，再選下一塊。`);
+    showInvalidKeyboardPlacement(activePieceEl);
+    return false;
+}
+
+function activatePiece(piece) {
+    if (!canActivatePiece(piece)) {
+        updatePieceControls();
+        return false;
+    }
+
+    const el = piece.el;
+    activePiece = piece;
+    activePieceEl = el;
+
+    if (piece.isPlaced) {
+        piece.isPlaced = false;
+        el.classList.remove('placed');
+    }
+
+    activePieceSlot.innerHTML = '';
+    activePieceSlot.classList.remove('empty');
+    sizeActivePieceSlot(piece);
+
+    el.style.position = 'relative';
+    el.style.left = '';
+    el.style.top = '';
+    activePieceSlot.appendChild(el);
+    selectPieceWithKeyboard(piece, el, true);
+    updatePieceControls();
+    announceStatus(`已選取拼塊 ${piece.id}。可用下方按鈕旋轉或翻轉，再點底盤放置。`);
+    return true;
+}
+
+function clearActivePieceAfterPlacement() {
+    activePiece = null;
+    activePieceEl = null;
+    activePieceSlot.innerHTML = '';
+    activePieceSlot.classList.add('empty');
+    sizeActivePieceSlot(null);
+    clearKeyboardSelection();
+    updatePieceControls();
+}
+
+function updatePieceControls() {
+    const hasActive = Boolean(activePiece && activePieceEl && !activePiece.isPlaced);
+    rotatePieceBtn.disabled = !hasActive;
+    flipPieceBtn.disabled = !hasActive;
+    recallPieceBtn.disabled = !hasActive;
+
+    activePieceTitle.textContent = hasActive ? `正在操作：拼塊 ${activePiece.id}` : '選一塊拼塊';
+    activePieceStatus.textContent = hasActive
+        ? '先把這塊放回底盤，才能切換下一塊。'
+        : '點選拼塊後，可旋轉、翻轉，再點底盤格子放置。';
+
+    activePieces.forEach(piece => {
+        const selector = piece.selectorEl;
+        if (!selector) return;
+
+        selector.classList.toggle('active', activePiece === piece && !piece.isPlaced);
+        selector.classList.toggle('placed', piece.isPlaced);
+        selector.classList.toggle('locked', hasActive && activePiece !== piece);
+        selector.disabled = hasActive && activePiece !== piece;
+        selector.textContent = piece.isPlaced ? `拼塊 ${piece.id} ✓` : `拼塊 ${piece.id}`;
+    });
+}
+
+function sizeActivePieceSlot(piece) {
+    if (!piece) {
+        activePieceSlot.style.removeProperty('--active-slot-width');
+        activePieceSlot.style.removeProperty('--active-slot-height');
+        return;
+    }
+
+    const rows = piece.shape.length;
+    const cols = Math.max(...piece.shape.map(row => row.length));
+    activePieceSlot.style.setProperty('--active-slot-width', `calc(${cols} * (var(--cell-size) + var(--gap)) + 2rem)`);
+    activePieceSlot.style.setProperty('--active-slot-height', `calc(${rows} * (var(--cell-size) + var(--gap)) + 2rem)`);
 }
 
 function renderPieceDOM(piece, el) {
@@ -454,6 +678,52 @@ function flipPiece(piece) {
     piece.shape.forEach(row => row.reverse());
 }
 
+function cloneShape(shape) {
+    return shape.map(row => [...row]);
+}
+
+function shapeKey(shape) {
+    return JSON.stringify(shape);
+}
+
+function getShapeOrientations(shape) {
+    const seen = new Set();
+    const orientations = [];
+
+    for (let flipped = 0; flipped < 2; flipped++) {
+        let current = flipped ? cloneShape(shape).map(row => row.reverse()) : cloneShape(shape);
+        for (let rotation = 0; rotation < 4; rotation++) {
+            const key = shapeKey(current);
+            if (!seen.has(key)) {
+                seen.add(key);
+                orientations.push(cloneShape(current));
+            }
+            const rows = current.length;
+            const cols = current[0].length;
+            const rotated = Array.from({ length: cols }, () => Array(rows).fill(0));
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    rotated[c][rows - 1 - r] = current[r][c];
+                }
+            }
+            current = rotated;
+        }
+    }
+
+    return orientations;
+}
+
+function transformActivePiece(transform) {
+    if (!activePiece || !activePieceEl || activePiece.isPlaced) return;
+
+    AudioSys.rotate();
+    transform(activePiece);
+    renderPieceDOM(activePiece, activePieceEl);
+    sizeActivePieceSlot(activePiece);
+    addMove();
+    updatePieceControls();
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -471,7 +741,8 @@ function clearKeyboardSelection() {
     updateKeyboardTarget();
 }
 
-function selectPieceWithKeyboard(piece, el) {
+function selectPieceWithKeyboard(piece, el, skipActivate = false) {
+    if (!skipActivate && !activatePiece(piece)) return;
     if (keyboardSelection && keyboardSelection.piece === piece) return;
 
     if (keyboardSelection) {
@@ -542,6 +813,7 @@ function placeKeyboardSelection() {
     addMove();
     AudioSys.drop();
     announceStatus(`拼塊 ${piece.id} 已放置。`);
+    clearActivePieceAfterPlacement();
     checkWinCondition();
 }
 
@@ -575,18 +847,10 @@ function onPieceKeyDown(e, piece, el) {
         moveKeyboardTarget(0, 1);
     } else if (key === 'r') {
         e.preventDefault();
-        AudioSys.rotate();
-        rotatePiece(piece);
-        renderPieceDOM(piece, el);
-        addMove();
-        if (piece.isPlaced) checkPlacement(piece, el);
+        transformActivePiece(rotatePiece);
     } else if (key === 'f') {
         e.preventDefault();
-        AudioSys.rotate();
-        flipPiece(piece);
-        renderPieceDOM(piece, el);
-        addMove();
-        if (piece.isPlaced) checkPlacement(piece, el);
+        transformActivePiece(flipPiece);
     } else if (e.key === 'Escape') {
         e.preventDefault();
         clearKeyboardSelection();
@@ -625,18 +889,10 @@ function onBoardKeyDown(e) {
         announceStatus('已取消選取拼塊。');
     } else if (key === 'r') {
         e.preventDefault();
-        AudioSys.rotate();
-        rotatePiece(piece);
-        renderPieceDOM(piece, el);
-        addMove();
-        if (piece.isPlaced) checkPlacement(piece, el);
+        transformActivePiece(rotatePiece);
     } else if (key === 'f') {
         e.preventDefault();
-        AudioSys.rotate();
-        flipPiece(piece);
-        renderPieceDOM(piece, el);
-        addMove();
-        if (piece.isPlaced) checkPlacement(piece, el);
+        transformActivePiece(flipPiece);
     } else if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
         returnToTray(el, piece);
@@ -653,6 +909,45 @@ function onGlobalKeyboardControl(e) {
     onBoardKeyDown(e);
 }
 
+function placeActivePieceAt(r, c) {
+    if (!activePiece || !activePieceEl || activePiece.isPlaced) return;
+
+    if (!isValidPlacement(activePiece, r, c)) {
+        AudioSys.error();
+        showInvalidKeyboardPlacement(activePieceEl);
+        announceStatus('這個位置不能放置，請換一格試試。');
+        return;
+    }
+
+    const piece = activePiece;
+    const el = activePieceEl;
+    const cellSize = getCellSize();
+    const gap = getGap();
+    const cellStep = cellSize + gap;
+
+    piece.r = r;
+    piece.c = c;
+    piece.isPlaced = true;
+    boardEl.appendChild(el);
+    el.style.position = 'absolute';
+    el.style.left = `${(gap/2) + piece.c * cellStep}px`;
+    el.style.top = `${(gap/2) + piece.r * cellStep}px`;
+    el.classList.add('placed');
+
+    addMove();
+    AudioSys.drop();
+    announceStatus(`拼塊 ${piece.id} 已放置。`);
+    clearActivePieceAfterPlacement();
+    checkWinCondition();
+}
+
+function onBoardClick(e) {
+    if (e.target.closest('.piece')) return;
+    const cell = e.target.closest('.cell');
+    if (!cell) return;
+    placeActivePieceAt(parseInt(cell.dataset.r, 10), parseInt(cell.dataset.c, 10));
+}
+
 function getEventCoords(e) {
     if (e.touches && e.touches.length > 0) {
         return { x: e.touches[0].pageX, y: e.touches[0].pageY };
@@ -665,19 +960,23 @@ let dragOffsetX, dragOffsetY;
 
 function onDragStart(e) {
     if (e.type === 'mousedown' && e.button !== 0) return;
+    const el = e.currentTarget;
+    const piece = activePieces[el.dataset.index];
+    if (!canActivatePiece(piece)) return;
+
     if (e.type === 'touchstart') e.preventDefault(); // Prevent scroll
     clearKeyboardSelection();
+    activePiece = piece;
+    activePieceEl = el;
     
     AudioSys.init(); // Ensure audio context starts
     AudioSys.pickup();
-    
-    const el = e.currentTarget;
-    const piece = activePieces[el.dataset.index];
     const coords = getEventCoords(e);
     
     const rect = el.getBoundingClientRect();
     dragOffsetX = coords.x - (rect.left + window.scrollX);
     dragOffsetY = coords.y - (rect.top + window.scrollY);
+    const wasPlaced = piece.isPlaced;
     
     // 手機端防手指遮擋偏移 (往上提 1.5 個格子)
     if (e.type === 'touchstart') {
@@ -694,8 +993,9 @@ function onDragStart(e) {
     
     piece.isPlaced = false;
     el.classList.remove('placed');
+    updatePieceControls();
     
-    draggingPiece = { el, piece, startX: coords.x, startY: coords.y };
+    draggingPiece = { el, piece, startX: coords.x, startY: coords.y, wasPlaced };
     
     document.addEventListener('mousemove', onDragMove, {passive: false});
     document.addEventListener('mouseup', onDragEnd);
@@ -720,7 +1020,7 @@ function onDragEnd(e) {
     document.removeEventListener('touchmove', onDragMove);
     document.removeEventListener('touchend', onDragEnd);
     
-    const { el, piece, startX, startY } = draggingPiece;
+    const { el, piece, startX, startY, wasPlaced } = draggingPiece;
     draggingPiece = null;
     
     // For touchend, e.clientX is undefined, we use changedTouches
@@ -737,14 +1037,13 @@ function onDragEnd(e) {
     const dy = Math.abs(endY - startY);
     const isClick = dx < 5 && dy < 5;
     
-    if (isClick) {
-        AudioSys.rotate();
-        rotatePiece(piece);
-        addMove();
-        renderPieceDOM(piece, el);
-    } else {
-        addMove(); // Drag drop counts as a move
+    if (isClick && wasPlaced) {
+        returnToTray(el, piece);
+        announceStatus(`拼塊 ${piece.id} 已回到操作擺盤。`);
+        return;
     }
+
+    if (!isClick) addMove(); // Drag drop counts as a move
     
     const boardRect = boardEl.getBoundingClientRect();
     const cellSize = getCellSize();
@@ -782,6 +1081,7 @@ function onDragEnd(e) {
             el.style.top = `${(gap/2) + boardR * cellStep}px`;
             el.classList.add('placed');
             AudioSys.drop();
+            clearActivePieceAfterPlacement();
             checkWinCondition();
             return;
         } else {
@@ -793,16 +1093,18 @@ function onDragEnd(e) {
 }
 
 function returnToTray(el, piece) {
-    if (keyboardSelection && keyboardSelection.piece === piece) {
-        clearKeyboardSelection();
-    }
+    activePiece = piece;
+    activePieceEl = el;
     piece.isPlaced = false;
     el.classList.remove('placed');
     el.style.position = 'relative';
     el.style.left = '';
     el.style.top = '';
-    const slot = document.getElementById(`slot-${piece.index}`);
-    slot.appendChild(el);
+    activePieceSlot.innerHTML = '';
+    activePieceSlot.classList.remove('empty');
+    sizeActivePieceSlot(piece);
+    activePieceSlot.appendChild(el);
+    updatePieceControls();
 }
 
 function isValidPlacement(piece, r, c) {
@@ -861,9 +1163,18 @@ function checkPlacement(piece, el) {
 }
 
 function checkWinCondition() {
-    const allPlaced = activePieces.every(p => p.isPlaced);
-    if (!allPlaced) return;
-    
+    if (!isLayoutSolved(activePieces)) return;
+
+    isPlaying = false;
+    clearInterval(timerInterval);
+    AudioSys.win();
+    showVictory();
+}
+
+function isLayoutSolved(layout) {
+    if (!layout || layout.length !== activePieces.length || layout.some(piece => !piece)) return false;
+    if (layout.some(piece => piece.isPlaced === false)) return false;
+
     let dogsCovered = 0;
     let bonesCovered = 0;
     let totalBones = 0;
@@ -879,9 +1190,9 @@ function checkWinCondition() {
         }
     }
     
-    activePieces.forEach(piece => {
+    layout.forEach(piece => {
         for (let pr = 0; pr < piece.shape.length; pr++) {
-            for (let pc = 0; pc < piece.shape[0].length; pc++) {
+            for (let pc = 0; pc < piece.shape[pr].length; pc++) {
                 const br = piece.r + pr;
                 const bc = piece.c + pc;
                 if (piece.shape[pr][pc] === 2) {
@@ -897,22 +1208,28 @@ function checkWinCondition() {
         for(let r=0; r<BOARD_SIZE; r++) {
             for(let c=0; c<BOARD_SIZE; c++) {
                 if (boardState[r][c] !== TYPES.HOLE) continue;
-                if (isHoleAligned(r, c)) holesAligned++;
+                if (isLayoutHoleAligned(layout, r, c)) holesAligned++;
             }
         }
     }
-    
-    if (dogsCovered === totalDogs && bonesCovered === totalBones && holesAligned === totalHoles && isPathNetworkValid()) {
-        isPlaying = false;
-        clearInterval(timerInterval);
-        AudioSys.win();
-        showVictory();
-    }
+
+    return dogsCovered === totalDogs
+        && bonesCovered === totalBones
+        && holesAligned === totalHoles
+        && isLayoutPathNetworkValid(layout);
 }
 
 function isHoleAligned(r, c) {
     return activePieces.some(piece => {
         if (!piece.isPlaced) return false;
+        const pr = r - piece.r;
+        const pc = c - piece.c;
+        return pr >= 0 && pr < piece.shape.length && pc >= 0 && pc < piece.shape[pr].length && piece.shape[pr][pc] === 0;
+    });
+}
+
+function isLayoutHoleAligned(layout, r, c) {
+    return layout.some(piece => {
         const pr = r - piece.r;
         const pc = c - piece.c;
         return pr >= 0 && pr < piece.shape.length && pc >= 0 && pc < piece.shape[pr].length && piece.shape[pr][pc] === 0;
@@ -926,6 +1243,38 @@ function isPathNetworkValid() {
     const pathCells = new Set();
     activePieces.forEach(piece => {
         if (!piece.isPlaced) return;
+        for (let pr = 0; pr < piece.shape.length; pr++) {
+            for (let pc = 0; pc < piece.shape[pr].length; pc++) {
+                if (isPathType(piece.shape[pr][pc])) pathCells.add(`${piece.r + pr},${piece.c + pc}`);
+            }
+        }
+    });
+
+    if (pathCells.size === 0) return false;
+    const [start] = pathCells;
+    const seen = new Set([start]);
+    const queue = [start];
+
+    while (queue.length > 0) {
+        const [r, c] = queue.shift().split(',').map(Number);
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dr, dc]) => {
+            const key = `${r + dr},${c + dc}`;
+            if (pathCells.has(key) && !seen.has(key)) {
+                seen.add(key);
+                queue.push(key);
+            }
+        });
+    }
+
+    return seen.size === pathCells.size;
+}
+
+function isLayoutPathNetworkValid(layout) {
+    const levelData = getCurrentLevelData();
+    if (!levelData.requireConnectedPaths) return true;
+
+    const pathCells = new Set();
+    layout.forEach(piece => {
         for (let pr = 0; pr < piece.shape.length; pr++) {
             for (let pc = 0; pc < piece.shape[pr].length; pc++) {
                 if (isPathType(piece.shape[pr][pc])) pathCells.add(`${piece.r + pr},${piece.c + pc}`);
@@ -992,13 +1341,6 @@ function renderVictoryBadges(badges, isNewBest) {
     });
 }
 
-function sizeTraySlot(slot, piece) {
-    const rows = piece.baseShape.length;
-    const cols = Math.max(...piece.baseShape.map(row => row.length));
-    slot.style.setProperty('--slot-width', `calc(${cols} * (var(--cell-size) + var(--gap)) + 1.5rem)`);
-    slot.style.setProperty('--slot-height', `calc(${rows} * (var(--cell-size) + var(--gap)) + 1.5rem)`);
-}
-
 function showVictory() {
     const thresholds = getThresholds();
     let stars = 1;
@@ -1044,7 +1386,15 @@ levelSelect.addEventListener('change', (e) => {
 
 resetBtn.addEventListener('click', initGame);
 boardEl.addEventListener('keydown', onBoardKeyDown);
+boardEl.addEventListener('click', onBoardClick);
 document.addEventListener('keydown', onGlobalKeyboardControl);
+rotatePieceBtn.addEventListener('click', () => transformActivePiece(rotatePiece));
+flipPieceBtn.addEventListener('click', () => transformActivePiece(flipPiece));
+recallPieceBtn.addEventListener('click', () => {
+    if (!activePiece || !activePieceEl || activePiece.isPlaced) return;
+    returnToTray(activePieceEl, activePiece);
+    announceStatus(`拼塊 ${activePiece.id} 已回到操作擺盤。`);
+});
 
 function getDailyLevelId() {
     const today = new Date();
